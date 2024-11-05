@@ -1,10 +1,10 @@
-# FFI Safety
+# FFI safety
 
-> NB: This document will be worked on later, since FFI and ABI are finicky beasts, and it's better to work on this when I am in the weeds of it. Nevertheless, it is an explicit goal of `L` to _try_ to be FFI safe.
-
-TODO: Elaborate on how the paper is used to help improve FFI safety in `L`.
-
-1. [Semantic Encapsulation using Linking Types](https://www.khoury.northeastern.edu/home/amal/papers/lt.pdf).
+> NB: This document will be worked on later, since FFI and ABI are finicky beasts, and it's better to work on this when I am in the weeds of it.
+>
+> Nevertheless, it is an explicit goal of `L` to _try_ to be FFI safe.
+>
+> TODO: Elaborate on how the paper is used to help improve FFI safety in `L`. [Semantic Encapsulation using Linking Types](https://www.khoury.northeastern.edu/home/amal/papers/lt.pdf).
 
 ## Motivation
 
@@ -49,11 +49,11 @@ And we want to take the above and transform it into our idiomatic variation:
 
 ```
 enum Shape where
-  Circle Radius
-  Triangle Real Real
+  Circle (r: Radius)
+  Triangle (b: Rational) (h: Rational)
 ```
 
-Then one would write the following isomorphisms:
+Then one would implement the following isomorphisms:
 
 ```
 impl Shape <=> GeometryShape where

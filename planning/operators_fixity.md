@@ -17,8 +17,8 @@ Suppose we've discovered numbers:
 
 ```
 enum Nat where
-  Zero
-  Succ Nat
+  Z
+  S Nat
 ```
 
 And we realized the idea to "lump" numbers in different ways, which we will call "adding," and denote that action with an operator `+` called plus. From observational evidence of adding things together scientifically, we have a few axioms for which we implement on `Nat + Nat`.
@@ -28,8 +28,8 @@ trait x + y where
   Add x y = x + y
 
 impl Nat + Nat where
-  x + Zero   = x
-  x + Succ y = Succ (x + y)
+  x + Z   = x
+  x + S y = S (x + y)
 ```
 
 Then after using the `+` for a bit while, one wishes for a function doing the repetition for us. We could denote this operator `*` called multiply.
@@ -39,8 +39,8 @@ trait x * y where
   Mul x y = x * y
 
 impl Nat * Nat where
-  x * Zero   = Zero
-  x * Succ y = x + (x * y)
+  x * Z   = Z
+  x * S y = x + (x * y)
 ```
 
 And in `Nat * Nat` we can see that it is expressed in terms of `Nat + Nat`, so it must be the case that `Nat * Nat` has a higher precedence over `Nat + Nat`. We can also see how associativity is emergent based on the implementation:

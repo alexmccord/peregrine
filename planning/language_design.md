@@ -1,4 +1,4 @@
-# Language Design
+# Language design
 
 ## Syntax
 
@@ -55,7 +55,7 @@ As you can see, the syntax is very small. This is the consequence of the followi
 2. expression/pattern uniformity, and
 3. syntactic composition.
 
-By "expression/pattern uniformity," we mean there is no difference between the intensional property, only just by their extensional property. How this can be done is by treating expressions whose unbound variables in a positive polarity are isomorphic to the $\forall$ quantifier.
+By "expression/pattern uniformity," we mean there is no difference between the intensional property, only just by their extensional property. How this can be done is by treating expressions whose unbound variables in a positive polarity as being isomorphic to the $\forall$ quantifier.
 
 Using Rust as an example, the intensional part is the function signature and the extensional part is the body of the function.
 
@@ -63,10 +63,10 @@ Using Rust as an example, the intensional part is the function signature and the
 fn add(x: i32, y: i32) -> i32 { x + y }
 ```
 
-| Rust context     | Intensional                  | Extensional |
-|------------------|------------------------------|-------------|
-| `fn` declaration | `add(x: i32, y: i32) -> i32` | `x + y`     |
-| `fn` application | N/a                          | `add(1, 2)` |
+| Rust context     | Intensional                  | Extensional
+|------------------|------------------------------|-------------
+| `fn` declaration | `add(x: i32, y: i32) -> i32` | `x + y`
+| `fn` application | N/a                          | `add(1, 2)`
 
 With the uniformity in `L`, the only difference that remains are that intensional and extensional only tell us _what_ to do with unbound variables. As an example:
 
@@ -82,7 +82,7 @@ trait x + y where
 
 Which tabulates like so:
 
-| `L` context | Intensional | Extensional             |
-|-------------|-------------|-------------------------|
-| expression  | `x + y`     | `(x: Type) + (y: Type)` |
-| expression  | `Add x y`   | `x + y`                 |
+| `L` context | Intensional | Extensional
+|-------------|-------------|-------------
+| expression  | `x + y`     | `(+): (x: Type) -> (y: Type) -> Trait`
+| expression  | `Add x y`   | `x + y`
