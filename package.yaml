@@ -19,7 +19,8 @@ extra-source-files:
 description:         Please see the README on GitHub at <https://github.com/alexmccord/clu#readme>
 
 dependencies:
-- base >= 4.7 && < 5
+- base >=4.7 && <5
+- text >=2.0.2 && <3
 
 ghc-options:
 - -Wall
@@ -42,6 +43,7 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - clu
+    - megaparsec >=9.5.0 && <10
 
 tests:
   clu-test:
@@ -53,3 +55,4 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - clu
+    - hspec >=2.11.9 && <3

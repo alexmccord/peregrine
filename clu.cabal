@@ -32,6 +32,7 @@ library
   ghc-options: -Wall -Widentities -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
+    , text >=2.0.2 && <3
   default-language: Haskell2010
 
 executable clu-exe
@@ -44,6 +45,8 @@ executable clu-exe
   build-depends:
       base >=4.7 && <5
     , clu
+    , megaparsec >=9.5.0 && <10
+    , text >=2.0.2 && <3
   default-language: Haskell2010
 
 test-suite clu-test
@@ -57,4 +60,6 @@ test-suite clu-test
   build-depends:
       base >=4.7 && <5
     , clu
+    , hspec >=2.11.9 && <3
+    , text >=2.0.2 && <3
   default-language: Haskell2010
