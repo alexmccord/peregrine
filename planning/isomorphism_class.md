@@ -79,6 +79,7 @@ impl Nat <=> OpSem.UInt64 where
 3. Need a way to talk about "is the function injective and surjective"
 4. Need a way to ascribe a function with these laws that it must obey.
 5. Requires pattern unification a la Prolog.
+5. Since `<=>` has a commutative algebra, an implementation of `a <=> b` entails one for `b <=> a`. This needs some construct.
 
 ```
 trait (a: T) <=> (b: T) where
