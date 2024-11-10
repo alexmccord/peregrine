@@ -18,9 +18,18 @@ extra-source-files:
 # common to point users to the README.md file.
 description:         Please see the README on GitHub at <https://github.com/alexmccord/clu#readme>
 
+default-extensions:
+- OverloadedStrings
+- OverloadedRecordDot
+- RecordWildCards
+- ApplicativeDo
+- GeneralizedNewtypeDeriving
+
 dependencies:
 - base >=4.7 && <5
-- text >=2.0.2 && <3
+- containers >=0.6.7 && <0.7
+- transformers >=0.6.1.0 && <0.7
+- mtl >=2.3.1 && <3
 
 ghc-options:
 - -Wall
@@ -32,6 +41,8 @@ ghc-options:
 
 library:
   source-dirs: src
+  dependencies:
+  - megaparsec >=9.5.0 && <10
 
 executables:
   clu-exe:
@@ -43,7 +54,7 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - clu
-    - megaparsec >=9.5.0 && <10
+    - optparse-applicative >=0.18.1.0 && <1
 
 tests:
   clu-test:
