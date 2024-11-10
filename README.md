@@ -8,6 +8,8 @@
 > 1. SC
 > 2. Clu
 > 3. ???
+>
+> If a name is settled, run ``s/`L`/<name>`` and ``s/build.l/build.<ext>``.
 
 `L` aims to be a research project (read: theorycrafting) that hopes to be an assemblage of some advancements in type theory and programming language designs of the past several decades.
 
