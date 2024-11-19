@@ -86,3 +86,11 @@ Which tabulates like so:
 |-------------|-------------|-------------
 | expression  | `x + y`     | `(+): (x: Type) -> (y: Type) -> Trait`
 | expression  | `Add x y`   | `x + y`
+
+## Ideas
+
+If one writes a bunch of equalities, and it worked like it did in Haskell where each equation is tested one by one, it can be too easy to write an equation that would be subsumed by a prior one, causing unintended results.
+
+One option to resolve this is to expose specificity of each equation in a sequence of patterns. One could then use that information to lint (or enforce?) saying that you need to reorder the equations such that the one with the greatest specificity goes first, and all other equations belonging to that same specificity class must be placed together.
+
+You can also use this information to rearrange the order of equations that would get evaluated, but this raises a cause of concern. I'd rather a lint or an error.
