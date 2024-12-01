@@ -6,6 +6,16 @@
 >
 > TODO: Elaborate on how the paper is used to help improve FFI safety in `L`. [Semantic Encapsulation using Linking Types](https://www.khoury.northeastern.edu/home/amal/papers/lt.pdf).
 
+## Random thoughts
+
+If we keep track of which category we're in, what if we defined two categories `Safe` and `Unsafe`?
+
+The `Safe` category is the category encompassing the values of the language.
+
+The `Unsafe` category is the category encompassing the computations that has no guarantees such as FFI.
+
+An analogy to draw from here is Rust's `unsafe` contexts: from safe Rust you have a morphism into unsafe context and a morphism back into safe context. Perhaps we could do the same here, just using categories.
+
 ## Motivation
 
 1. You must pay for the overhead of marshalling in either directions.

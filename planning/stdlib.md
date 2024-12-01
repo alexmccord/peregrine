@@ -49,8 +49,6 @@ let O (n: Nat) =
 
 -- trait Operad n = O n where -- says Operad n = O n _plus_ the following in `where`:
 --     compose f (op: O m)
-
-
 ```
 
 ## Number systems
