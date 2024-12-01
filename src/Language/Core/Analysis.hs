@@ -51,13 +51,13 @@ instance (ColumnOps cs a) => ColumnOps (c : cs) a where
   cget (CCons _ cs) = cget cs
   cput (CCons m cs) k a = CCons m (cput cs k a)
 
-data Node = Id Int
+newtype Node = Node Int
   deriving (Eq, Ord, Show)
 
 data Analysis cs = Analysis
   { table :: Column cs,
     dirty :: Set Node,
-    id :: Int
+    node :: Node
   }
 
 insert :: (ColumnOps cs a) => Node -> a -> AnalysisM e cs ()
@@ -76,22 +76,22 @@ data AnalysisResult e rec = AnalysisResult
     analysis :: Analysis rec
   }
 
-nextId :: AnalysisM e cs Node
-nextId = do
-  analysis <- get
-  modify $ \a -> a {id = a.id + 1}
-  pure $ Id analysis.id
+nextNode :: AnalysisM e cs Node
+nextNode = do
+  Node i <- gets node
+  modify $ \a -> a {node = Node (i + 1)}
+  pure (Node i)
 
--- Given an `Id` `k`, try to retrieve the data bound by `k`. Returns `Just` iff `k` is indeed bound to `a`.
+-- Given a Node `k`, try to retrieve the data bound by `k`. Returns `Just` iff `k` is indeed bound to `a`.
 retrieve :: (ColumnOps cs a) => Node -> AnalysisM e cs (Maybe a)
 retrieve k = gets (cget . table <*> pure k)
 
--- Returns a fresh `Id` bound to the provided `value`.
+-- Returns a fresh node bound to the provided `value`.
 fresh :: (ColumnOps cs a) => a -> AnalysisM e cs Node
 fresh value = do
-  id' <- nextId
-  bind id' value
-  return id'
+  node <- nextNode
+  bind node value
+  return node
 
 -- Ascribes `value` to the provided `k`.
 bind :: (ColumnOps cs a) => Node -> a -> AnalysisM e cs ()
@@ -109,5 +109,5 @@ runAnalysis :: (MkCol cs) => AnalysisM e cs a -> (Maybe a, AnalysisResult e cs)
 runAnalysis c = toResult $ go c initialAnalysis
   where
     go = runState . runWriterT . runMaybeT . runAnalysisStateM
-    initialAnalysis = Analysis {table = mkColumns, dirty = S.empty, id = 0}
+    initialAnalysis = Analysis {table = mkColumns, dirty = S.empty, node = Node 0}
     toResult ((a, e), finalAnalysis) = (a, AnalysisResult {errors = e, analysis = finalAnalysis})
