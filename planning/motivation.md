@@ -1,5 +1,7 @@
 # Motivation
 
+> TL;DR: I'm limited by the technology of my time.
+
 It comes from my never-ending thirst for the ideal programming language that hits just the sweet spot for my ADHD brain, without having to sacrifice the design I wanted to go for in order to satiate my OCD brain.
 
 The first language I picked up on was Lua in the context of Roblox. It was a simple language, and obviously it is not without its flaws, but the amount of footguns in the language is actually pretty small.
