@@ -6,8 +6,6 @@ module Language.Assembly.ISA.X64.Memory
 where
 
 -- import Language.Assembly.ISA.X64.Immediates
-
-import Data.Char
 import Language.Assembly.ISA.X64.Registers
 
 newtype ScaleFactor = S Int

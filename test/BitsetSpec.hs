@@ -31,7 +31,7 @@ spec = do
 
   describe "bit fiddling" $ do
     it "sets bit 0" $ bs00 `setBit` 0 == bs01
-    it "sets bit 1" $ bs00 `setBit` 1 == bs01
+    it "sets bit 1" $ bs00 `setBit` 1 == bs10
     it "sets bit 2" $ bs00 `setBit` 2 == bs00
     it "bitwise and" $ bs11 .&. bs01 == bs01
     it "bitwise ior" $ bs00 .|. bs01 == bs01

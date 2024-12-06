@@ -7,15 +7,14 @@ module Data.Bitset
     bitset,
     bitsetFromIntegral,
     bitsetToIntegral,
-    toList,
-    fromList,
+    IsList (..),
   )
 where
 
 import qualified Data.BitVector.Sized as BV
 import qualified Data.BitVector.Sized.Unsigned as BV
 import Data.Bits
-import Data.List
+import qualified Data.Foldable as F
 import GHC.IsList
 import GHC.TypeLits
 
@@ -47,7 +46,7 @@ bitsetToIntegral (Bitset bv) = fromInteger (BV.asUnsigned $ BV.asBV bv)
 instance (KnownNat n) => IsList (Bitset n) where
   type Item (Bitset n) = Bool
   toList bs = reverse [testBit bs i | i <- [0 .. finiteBitSize bs - 1]]
-  fromList xs = foldl' step zeroBits (zip [0 ..] (reverse xs))
+  fromList xs = F.foldl' step zeroBits (zip [0 ..] (reverse xs))
     where
       step :: Bitset n -> (Int, Bool) -> Bitset n
       step bs (i, b) = if b then bs `setBit` i else bs
