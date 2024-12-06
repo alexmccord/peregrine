@@ -1,5 +1,5 @@
 module Language.Assembly.ISA.X64.Immediates
-  ( Imm,
+  ( Imm (..),
   )
 where
 

@@ -1,11 +1,16 @@
 module Language.Assembly.ISA.X64.Memory
-  ( Mem,
+  ( Mem (..),
+    RegOffset (..),
+    ScaleFactor (..),
   )
 where
 
-import Language.Assembly.ISA.X64.Immediates
-import Language.Assembly.ISA.X64.Internal
+-- import Language.Assembly.ISA.X64.Immediates
+
+import Data.Char
 import Language.Assembly.ISA.X64.Registers
+
+newtype ScaleFactor = S Int
 
 data RegOffset = RegOffset Reg | RipOffset
 

@@ -72,14 +72,13 @@ module Language.Assembly.ISA.X64.Registers
 where
 
 import Data.Bitset
-import Data.Type.Nat
 import GHC.TypeLits
 
 data Legacy = LS32 | LS16 | LS8L
 
 data Extended = ES64 | ES32 | ES16 | ES8
 
-pattern RegBitset :: (KnownNat n, SNatI (FromGHC n)) => Int -> Bitset n
+pattern RegBitset :: (KnownNat n) => Int -> Bitset n
 pattern RegBitset n <- (bitsetToIntegral -> n)
   where
     RegBitset = bitsetFromIntegral
