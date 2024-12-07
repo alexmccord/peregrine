@@ -1,17 +1,6 @@
-# `L`
+# Peregrine
 
-> NB: Since the language doesn't even yet have a name, it will be designated as `L`.
->
-> I have thought about calling it SC, as in a "successor of C" using the successor function notation. That name is pretty cute compared to things like C++, C#, D, C2, C3, etc. But phonetically speaking, it has multiple syllables for all variations: "SC" or "succ of C" or "successor of C" for which none flows smoothly, which is a drag. Also probably want to keep the name SC for a C family language, of which `L` is strongly in the ML family.
->
-> Here are the list of candidate names:
-> 1. SC
-> 2. Clu
-> 3. ???
->
-> If a name is settled, run ``s/`L`/<name>`` and ``s/build.l/build.<ext>``.
-
-`L` aims to be a research project (read: theorycrafting) that hopes to be an assemblage of some advancements in type theory and programming language designs of the past several decades.
+Peregrine aims to be a research project (read: theorycrafting) that hopes to be an assemblage of some advancements in type theory and programming language designs of the past several decades.
 
 In particular, it plans to be a memory safe, FFI safe, dependently typed functional programming language usable all the way down to systems programming.
 
@@ -19,7 +8,7 @@ In particular, it plans to be a memory safe, FFI safe, dependently typed functio
 >
 > **Do not take them as a proclamation**. The implementation doesn't even exist or is incomplete!
 
-**Memory safety**. Like Rust, if `L` builds, there shall be no erroneous use of memory. What remains to be seen is the approach this entails.
+**Memory safety**. Like Rust, if Peregrine builds, there shall be no erroneous use of memory. What remains to be seen is the approach this entails.
 
 | Strategy   | Stance | Reason
 |------------|--------|--------

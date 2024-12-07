@@ -9,7 +9,7 @@ There's several approaches done by most programming languages:
 
 The most common is obviously the first, which is pretty tolerable for the most part. The mistake usually occurs when the language picks a different syntax and doesn't adjust the fixity in accordance to human ambiguity. A human always reads `!x == y` as `(!x) == y` unambiguously, but not so for `not x == y`, which can be read as `(not x) == y` or `not (x == y)` and either interpretation does not yield the same result. Worse, side effects could be evaluated in a different order, too.
 
-## Fixity design in `L`
+## Fixity design in Peregrine
 
 The ideal design is one where you define your operators _relative_ to another.
 

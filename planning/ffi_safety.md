@@ -2,9 +2,9 @@
 
 > NB: This document will be worked on later, since FFI and ABI are finicky beasts, and it's better to work on this when I am in the weeds of it.
 >
-> Nevertheless, it is an explicit goal of `L` to _try_ to be FFI safe.
+> Nevertheless, it is an explicit goal of Peregrine to _try_ to be FFI safe.
 >
-> TODO: Elaborate on how the paper is used to help improve FFI safety in `L`. [Semantic Encapsulation using Linking Types](https://www.khoury.northeastern.edu/home/amal/papers/lt.pdf).
+> TODO: Elaborate on how the paper is used to help improve FFI safety in Peregrine. [Semantic Encapsulation using Linking Types](https://www.khoury.northeastern.edu/home/amal/papers/lt.pdf).
 
 ## Random thoughts
 

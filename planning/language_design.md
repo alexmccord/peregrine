@@ -68,7 +68,7 @@ fn add(x: i32, y: i32) -> i32 { x + y }
 | `fn` declaration | `add(x: i32, y: i32) -> i32` | `x + y`
 | `fn` application | N/a                          | `add(1, 2)`
 
-With the uniformity in `L`, the only difference that remains are that intensional and extensional only tell us _what_ to do with unbound variables. As an example:
+With the uniformity in Peregrine, the only difference that remains are that intensional and extensional only tell us _what_ to do with unbound variables. As an example:
 
 ```
 trait x + y where
@@ -82,7 +82,7 @@ trait x + y where
 
 Which tabulates like so:
 
-| `L` context | Intensional | Extensional
+| Peregrine context | Intensional | Extensional
 |-------------|-------------|-------------
 | expression  | `x + y`     | `(+): (x: Type) -> (y: Type) -> Trait`
 | expression  | `Add x y`   | `x + y`

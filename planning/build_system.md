@@ -1,6 +1,6 @@
 # Build systems
 
-After dealing with some frustration caused by various build systems or version management e.g. `ghcup`, I have decided that the build system for `L` must be hermetic.
+After dealing with some frustration caused by various build systems or version management e.g. `ghcup`, I have decided that the build system for Peregrine must be hermetic.
 
 The principle here we want to follow is Newton's first law, i.e. the final output remains identical given some state unless any force was applied onto the system. Thus, if you were to `git clone` a repo, there must be a guarantee that it's always safe to execute the build script, and a guarantee that it will produce the same exact binary for a target machine.
 
@@ -11,7 +11,7 @@ Some great role models for our build system we'd like to follow:
 
 ## Nomenclature
 
-The name [module](./module.md) are already used over, and using the plural form will lead to confusions. In `L`, the name for a collection of modules are called _apparatus_.
+The name [module](./module.md) are already used over, and using the plural form will lead to confusions. In Peregrine, the name for a collection of modules are called _apparatus_.
 
 An apparatus can depend on another apparatus, and only an apparatus.
 
@@ -66,9 +66,9 @@ impl Sink IO where
 
 And `main` has a _default_ sink function over all the effects in `IO`, and we do the same to `build` likewise, with a different implementation, as defined by `SystemIO` and `VirtualIO`.
 
-The build script is siloed off from the apparatus, so the build script cannot depend on things in it, nor can the apparatus depend on things from the build script. This also has the nice effect of making it safe to `git clone` some random project written in `L`.
+The build script is siloed off from the apparatus, so the build script cannot depend on things in it, nor can the apparatus depend on things from the build script. This also has the nice effect of making it safe to `git clone` some random project written in Peregrine.
 
-Each apparatus can have one and only one `build.l` file, and it must live at the directory root of the apparatus. The entry point for it will deviate slightly.
+Each apparatus can have one and only one `build.prg` file, and it must live at the directory root of the apparatus. The entry point for it will deviate slightly.
 
 ```
 let build: ?? = do
