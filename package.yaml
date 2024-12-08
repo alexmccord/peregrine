@@ -1,6 +1,6 @@
-name:                clu
+name:                peregrine
 version:             0.1.0.0
-github:              "alexmccord/clu"
+github:              "alexmccord/peregrine"
 license:             Apache-2.0
 author:              "Alexander McCord"
 maintainer:          "alex@mccord.dev"
@@ -16,7 +16,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/alexmccord/clu#readme>
+description:         Please see the README on GitHub at <https://github.com/alexmccord/peregrine#readme>
 
 default-extensions:
 - ApplicativeDo
@@ -60,7 +60,7 @@ library:
   - megaparsec >=9.5.0 && <10
 
 executables:
-  clu-exe:
+  peregrine-exe:
     main:        Main.hs
     source-dirs: app
     ghc-options:
@@ -68,11 +68,11 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - clu
+    - peregrine
     - optparse-applicative >=0.18.1.0 && <1
 
 tests:
-  clu-test:
+  peregrine-test:
     main:        Spec.hs
     source-dirs: test
     ghc-options:
@@ -80,6 +80,6 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - clu
+    - peregrine
     - hspec >=2.11.9 && <3
     - optparse-applicative >=0.18.1.0 && <1

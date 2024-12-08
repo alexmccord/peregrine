@@ -4,11 +4,11 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 
-name:           clu
+name:           peregrine
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/alexmccord/clu#readme>
-homepage:       https://github.com/alexmccord/clu#readme
-bug-reports:    https://github.com/alexmccord/clu/issues
+description:    Please see the README on GitHub at <https://github.com/alexmccord/peregrine#readme>
+homepage:       https://github.com/alexmccord/peregrine#readme
+bug-reports:    https://github.com/alexmccord/peregrine/issues
 author:         Alexander McCord
 maintainer:     alex@mccord.dev
 copyright:      2024 Alexander McCord
@@ -20,7 +20,7 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/alexmccord/clu
+  location: https://github.com/alexmccord/peregrine
 
 library
   exposed-modules:
@@ -31,10 +31,8 @@ library
       Language.Assembly.ISA.X64.Memory
       Language.Assembly.ISA.X64.Registers
       Language.Build
-      Language.Core.Analysis
-      Language.MorLam.IR
   other-modules:
-      Paths_clu
+      Paths_peregrine
   hs-source-dirs:
       src
   default-extensions:
@@ -67,10 +65,10 @@ library
     , transformers >=0.6.1.0 && <0.7
   default-language: Haskell2010
 
-executable clu-exe
+executable peregrine-exe
   main-is: Main.hs
   other-modules:
-      Paths_clu
+      Paths_peregrine
   hs-source-dirs:
       app
   default-extensions:
@@ -97,19 +95,19 @@ executable clu-exe
       base >=4.7 && <5
     , bv-sized >=1.0.5 && <2
     , bytestring >=0.11.5.3 && <0.12
-    , clu
     , containers >=0.6.7 && <0.7
     , mtl >=2.3.1 && <3
     , optparse-applicative >=0.18.1.0 && <1
+    , peregrine
     , transformers >=0.6.1.0 && <0.7
   default-language: Haskell2010
 
-test-suite clu-test
+test-suite peregrine-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
       BitsetSpec
-      Paths_clu
+      Paths_peregrine
   hs-source-dirs:
       test
   default-extensions:
@@ -136,10 +134,10 @@ test-suite clu-test
       base >=4.7 && <5
     , bv-sized >=1.0.5 && <2
     , bytestring >=0.11.5.3 && <0.12
-    , clu
     , containers >=0.6.7 && <0.7
     , hspec >=2.11.9 && <3
     , mtl >=2.3.1 && <3
     , optparse-applicative >=0.18.1.0 && <1
+    , peregrine
     , transformers >=0.6.1.0 && <0.7
   default-language: Haskell2010
