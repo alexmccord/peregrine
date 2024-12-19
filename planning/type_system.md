@@ -8,20 +8,8 @@ Cumulativity refers to the idea that a term in some universe $U_\alpha$ is also 
 
 In general, most of the time we live in $U_0$ (values) and $U_1$ (types) with occassional visits in $U_2$ (types of types), and beyond that is where people of certain sorts are.
 
-## `forall` and `exists` quantifiers.
+## Dependently typed type system
 
-In Haskell, type variables are implicitly universally quantified. This means when you write
 
-```hs
-apply :: (a -> b) -> a -> b
-```
 
-This would be equivalent to (using strawman `f @a :: sig` notation)
-
-```hs
-apply @a @b :: (a -> b) -> a -> b
-```
-
-where for any given typing context, the two type variables `a` and `b` can be bound to any type provided that the typing context has substitution variables mapping `a` and `b` to something.
-
-Notably though, sometimes what you _actually_ wanted are existentials, which in Haskell unfortunately shares with the same keyword `forall`, conflating the two ideas.
+## May consider HoTT
