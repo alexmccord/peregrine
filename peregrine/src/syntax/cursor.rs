@@ -1,19 +1,19 @@
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Alpha(pub char);
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Digit(pub char);
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Operator(pub char);
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Gate {
     Opened,
     Closed,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Delimiter {
     Paren(Gate),
     Brace(Gate),
@@ -86,21 +86,29 @@ impl Grapheme {
     }
 }
 
-pub struct Cursor {
-    input: String,
-    position: usize,
+pub struct Cursor<'input> {
+    input: &'input str,
+    offset: usize,
 }
 
-impl Cursor {
-    pub fn new(input: String) -> Cursor {
-        Cursor { input, position: 0 }
+impl<'input> Cursor<'input> {
+    pub fn new(input: &'input str) -> Cursor<'input> {
+        Cursor { input, offset: 0 }
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    pub fn slice(&'input self, i: usize, j: usize) -> &'input str {
+        &self.input[i..j]
     }
 
     pub fn seek_chars(&self) -> &[u8] {
-        if self.position >= self.input.len() {
+        if self.offset >= self.input.len() {
             &[]
         } else {
-            self.input.as_bytes().split_at(self.position).1
+            self.input.as_bytes().split_at(self.offset).1
         }
     }
 
@@ -158,12 +166,12 @@ impl Cursor {
     }
 }
 
-impl Iterator for Cursor {
+impl<'a> Iterator for Cursor<'a> {
     type Item = Grapheme;
 
     fn next(&mut self) -> Option<Self::Item> {
         let grapheme = self.get();
-        self.position += grapheme.len();
+        self.offset += grapheme.len();
 
         match grapheme {
             Grapheme::Eof => None,
@@ -179,7 +187,8 @@ mod tests {
     #[test]
     fn get_alpha_lowercase() {
         for c in 'a'..='z' {
-            let cursor = Cursor::new(c.to_string());
+            let str = c.to_string();
+            let cursor = Cursor::new(&str);
             assert_eq!(cursor.get(), Grapheme::Alpha(Alpha(c)));
         }
     }
@@ -187,7 +196,8 @@ mod tests {
     #[test]
     fn get_alpha_uppercase() {
         for c in 'A'..='Z' {
-            let cursor = Cursor::new(c.to_string());
+            let str = c.to_string();
+            let cursor = Cursor::new(&str);
             assert_eq!(cursor.get(), Grapheme::Alpha(Alpha(c)));
         }
     }
@@ -195,20 +205,21 @@ mod tests {
     #[test]
     fn get_digit() {
         for c in '0'..='9' {
-            let cursor = Cursor::new(c.to_string());
+            let str = c.to_string();
+            let cursor = Cursor::new(&str);
             assert_eq!(cursor.get(), Grapheme::Digit(Digit(c)));
         }
     }
 
     #[test]
     fn get_eof() {
-        let cursor = Cursor::new("".to_string());
+        let cursor = Cursor::new("");
         assert_eq!(cursor.get(), Grapheme::Eof);
     }
 
     #[test]
     fn get_all() {
-        let mut cursor = Cursor::new("abAB12".to_string());
+        let mut cursor = Cursor::new("abAB12");
         assert_eq!(cursor.next(), Some(Grapheme::Alpha(Alpha('a'))));
         assert_eq!(cursor.next(), Some(Grapheme::Alpha(Alpha('b'))));
         assert_eq!(cursor.next(), Some(Grapheme::Alpha(Alpha('A'))));
@@ -221,7 +232,7 @@ mod tests {
 
     #[test]
     fn get_newlines() {
-        let mut cursor = Cursor::new("\r\n\n".to_string());
+        let mut cursor = Cursor::new("\r\n\n");
         assert_eq!(cursor.next(), Some(Grapheme::Newline(Newline::CRLF)));
         assert_eq!(cursor.next(), Some(Grapheme::Newline(Newline::LF)));
         assert_eq!(cursor.next(), None);

@@ -1,94 +1,35 @@
 use crate::syntax::ast;
 use crate::syntax::lexer::{Keyword, Lexer, Token, TokenKind};
 
-use super::ast::Symbol;
-
-pub enum ParseError {
-    MissingName,
-    MissingExpr,
-}
-
-pub enum ParseResult<'ast> {
-    Success {
-        arena: ast::AstAllocator<'ast>,
-        program: ast::Program<'ast>,
-    },
-    Invalid {
-        arena: ast::AstAllocator<'ast>,
-        program: ast::Program<'ast>,
-        errors: Vec<ParseError>,
-    },
-}
-
-impl<'ast> ParseResult<'ast> {
-    fn get_arena(&self) -> &ast::AstAllocator<'ast> {
-        match self {
-            ParseResult::Success { arena, program: _ } => &arena,
-            ParseResult::Invalid {
-                arena,
-                program: _,
-                errors: _,
-            } => &arena,
-        }
-    }
-
-    pub fn get_program(&self) -> &ast::Program<'ast> {
-        match self {
-            ParseResult::Success { arena: _, program } => &program,
-            ParseResult::Invalid {
-                arena: _,
-                program,
-                errors: _,
-            } => &program,
-        }
-    }
-
-    pub fn get_expr(&self, id: ast::ExprId<'ast>) -> &ast::Expr<'ast> {
-        self.get_arena().get_expr(id)
-    }
-
-    pub fn get_decl(&self, id: ast::DeclId<'ast>) -> &ast::Decl<'ast> {
-        self.get_arena().get_decl(id)
-    }
-}
-
-impl<'ast> ParseResult<'ast> {
-    fn success(arena: ast::AstAllocator<'ast>, program: ast::Program<'ast>) -> ParseResult<'ast> {
-        ParseResult::Success { arena, program }
-    }
-
-    fn invalid(
-        arena: ast::AstAllocator<'ast>,
-        program: ast::Program<'ast>,
-        errors: Vec<ParseError>,
-    ) -> ParseResult<'ast> {
-        ParseResult::Invalid {
-            arena,
-            program,
-            errors,
-        }
-    }
-}
+use super::ast::{AstAllocator, AstError, Program, Symbol};
+use super::cursor::{Delimiter, Gate};
 
 pub enum Precedence {
     TyAnn, // e : T
     App,   // f e
-    Atom,  // e
+    Assoc, // (e)
 }
 
-pub struct Parser<'ast> {
-    lexer: Lexer,
-    arena: ast::AstAllocator<'ast>,
-    errors: Vec<ParseError>,
+pub struct Parser<'input, 'ast> {
+    lexer: Lexer<'input>,
+    arena: &'ast mut AstAllocator,
+    lookahead: Option<Token>,
 }
 
-impl<'ast> Parser<'ast> {
-    fn new(input: String) -> Parser<'ast> {
+impl<'input, 'ast> Parser<'input, 'ast>
+where
+    'ast: 'input,
+{
+    pub fn new(input: &'input str, arena: &'ast mut AstAllocator) -> Parser<'input, 'ast> {
         Parser {
             lexer: Lexer::new(input),
-            arena: ast::AstAllocator::default(),
-            errors: Vec::default(),
+            arena,
+            lookahead: None,
         }
+    }
+
+    pub fn parse(&mut self) -> Program {
+        self.parse_program()
     }
 
     fn next(&mut self) -> Option<Token> {
@@ -97,6 +38,10 @@ impl<'ast> Parser<'ast> {
         // not significant with respect to the parser. Since Peregrine is
         // whitespace sensitive, indent/dedent/newlines are significant,
         // and thus are not trivias.
+        if let Some(tok) = self.lookahead.take() {
+            return Some(tok);
+        }
+
         self.lexer.next()
     }
 
@@ -104,101 +49,23 @@ impl<'ast> Parser<'ast> {
     where
         F: FnOnce(&Token) -> bool,
     {
-        if f(self.lookahead()?) {
-            self.next()
+        if self.lookahead.is_none() {
+            self.lookahead = self.lexer.next();
+        }
+
+        let Some(tok) = &self.lookahead else {
+            return None;
+        };
+
+        if f(&tok) {
+            self.lookahead.take()
         } else {
             None
         }
     }
 
-    fn lookahead(&mut self) -> Option<&Token> {
-        // TODO: Same problem, skip trivias.
-        self.lexer.lookahead()
-    }
-
-    fn report(&mut self, err: ParseError) {
-        self.errors.push(err);
-    }
-
-    pub fn parse(input: String) -> ParseResult<'ast> {
-        let mut parser = Parser::new(input);
-        let program = parser.parse_program();
-
-        if parser.errors.is_empty() {
-            ParseResult::success(parser.arena, program)
-        } else {
-            ParseResult::invalid(parser.arena, program, parser.errors)
-        }
-    }
-
-    fn parse_program(&mut self) -> ast::Program<'ast> {
-        let mut program = ast::Program::new();
-
-        while let Some(decl) = self.parse_top_level() {
-            program.push(decl);
-        }
-
-        program
-    }
-
-    fn parse_top_level(&mut self) -> Option<ast::DeclId<'ast>> {
-        self.next().map(|tok| match tok.kind {
-            TokenKind::Unknown(_) => todo!(),
-            TokenKind::Kw(Keyword::Module) => todo!(),
-            TokenKind::Kw(Keyword::Import) => self.parse_import_decl(&tok),
-            TokenKind::Kw(Keyword::Struct) => todo!(),
-            TokenKind::Kw(Keyword::Data) => todo!(),
-            TokenKind::Kw(Keyword::Let) => self.parse_let_decl(&tok),
-            TokenKind::Kw(Keyword::Do) => todo!(),
-            TokenKind::Ident(_) => todo!(),
-            TokenKind::Numeral(_) => todo!(),
-            TokenKind::Operator(_) => todo!(),
-            TokenKind::Delimiter(_) => todo!(),
-            TokenKind::Indent => todo!(),
-            TokenKind::Dedent => todo!(),
-        })
-    }
-
-    fn parse_import_decl(&mut self, tok: &Token) -> ast::DeclId<'ast> {
-        assert!(Token::is_kw(tok, Keyword::Import));
-
-        let mut path = Vec::new();
-
-        while let Some(tok) = self.next() {
-            if let TokenKind::Ident(id) = tok.kind {
-                path.push(id)
-            }
-
-            if self.try_parse_operator('.').is_none() {
-                break;
-            }
-
-            self.next(); // consumes lookahead token
-        }
-
-        self.arena
-            .alloc_decl(ast::Decl::Import(ast::Import { path }))
-    }
-
-    fn parse_let_decl(&mut self, tok: &Token) -> ast::DeclId<'ast> {
-        assert!(Token::is_kw(tok, Keyword::Let));
-
-        let f = self.parse_expr(Precedence::TyAnn).unwrap_or_else(|| {
-            self.report(ParseError::MissingExpr);
-            self.arena.alloc_expr(ast::Expr::Error)
-        });
-
-        if self.try_parse_operator('=').is_some() {
-            let e = self.parse_expr(Precedence::TyAnn).unwrap_or_else(|| {
-                self.report(ParseError::MissingExpr);
-                self.arena.alloc_expr(ast::Expr::Error)
-            });
-
-            self.arena
-                .alloc_decl(ast::Decl::Let(ast::Let::Assign(f, e)))
-        } else {
-            self.arena.alloc_decl(ast::Decl::Let(ast::Let::Decl(f)))
-        }
+    fn try_parse_kw(&mut self, kw: Keyword) -> Option<Token> {
+        self.try_consume(|tok| tok.is_kw(kw))
     }
 
     fn try_parse_operator(&mut self, c: char) -> Option<Token> {
@@ -208,12 +75,122 @@ impl<'ast> Parser<'ast> {
         })
     }
 
-    fn parse_expr(&mut self, pred: Precedence) -> Option<ast::ExprId<'ast>> {
+    fn try_parse_delimiter(&mut self, delim: Delimiter) -> Option<Token> {
+        self.try_consume(|tok| match &tok.kind {
+            TokenKind::Delimiter(d) => d == &delim,
+            _ => false,
+        })
+    }
+
+    fn try_parse_ident(&mut self) -> Option<Token> {
+        self.try_consume(|tok| tok.get_ident().is_some())
+    }
+
+    fn make_err_expr(&mut self, err: AstError, expr: ast::ExprId) -> ast::ExprId {
+        self.arena.alloc_expr(ast::Expr::Error(err, Some(expr)))
+    }
+
+    fn report_expr_err(&mut self, err: AstError) -> ast::ExprId {
+        self.arena.alloc_expr(ast::Expr::Error(err, None))
+    }
+
+    fn make_err_decl(&mut self, err: AstError, decl: ast::DeclId) -> ast::DeclId {
+        self.arena.alloc_decl(ast::Decl::Error(err, Some(decl)))
+    }
+
+    fn report_decl_error(&mut self, err: AstError) -> ast::DeclId {
+        self.arena.alloc_decl(ast::Decl::Error(err, None))
+    }
+
+    fn make_expr(&mut self, expr: ast::Expr) -> ast::ExprId {
+        self.arena.alloc_expr(expr)
+    }
+
+    fn make_decl(&mut self, decl: ast::Decl) -> ast::DeclId {
+        self.arena.alloc_decl(decl)
+    }
+
+    fn parse_program(&mut self) -> ast::Program {
+        let mut decls = Vec::new();
+
+        while let Some(decl) = self.parse_top_level() {
+            decls.push(decl);
+        }
+
+        ast::Program::new(&self.arena, decls)
+    }
+
+    fn parse_top_level(&mut self) -> Option<ast::DeclId> {
+        let tok = self.next()?;
+        match tok.kind {
+            TokenKind::Unknown(_) => todo!(),
+            TokenKind::Kw(Keyword::Module) => todo!(),
+            TokenKind::Kw(Keyword::Import) => Some(self.parse_import_decl()),
+            TokenKind::Kw(Keyword::Struct) => todo!(),
+            TokenKind::Kw(Keyword::Data) => todo!(),
+            TokenKind::Kw(Keyword::Let) => Some(self.parse_let_decl()),
+            TokenKind::Kw(Keyword::Do) => todo!(),
+            TokenKind::Kw(Keyword::In) => todo!(),
+            TokenKind::Ident(_) => todo!(),
+            TokenKind::Numeral(_) => todo!(),
+            TokenKind::Operator(_) => todo!(),
+            TokenKind::Delimiter(_) => todo!(),
+        }
+    }
+
+    fn parse_import_decl(&mut self) -> ast::DeclId {
+        let mut path = Vec::new();
+
+        loop {
+            let tok = self.next();
+            if let Some(ident) = tok.as_ref().and_then(Token::get_ident) {
+                path.push(ident.clone());
+
+                if self.try_parse_operator('.').is_none() {
+                    break;
+                }
+            } else {
+                let decl = self.make_decl(ast::Decl::Import(ast::Import { path }));
+                return self.make_err_decl(AstError::MissingName, decl);
+            }
+        }
+
+        self.make_decl(ast::Decl::Import(ast::Import { path }))
+    }
+
+    fn parse_let_decl(&mut self) -> ast::DeclId {
+        let Some(f) = self.parse_expr(Precedence::TyAnn) else {
+            return self.report_decl_error(AstError::MissingExpr);
+        };
+
+        if self.try_parse_operator('=').is_none() {
+            return self.make_decl(ast::Decl::Let(ast::Let::Decl(f)));
+        }
+
+        let Some(e) = self.parse_expr(Precedence::TyAnn) else {
+            let decl = self.make_decl(ast::Decl::Let(ast::Let::Decl(f)));
+            return self.make_err_decl(AstError::MissingExpr, decl);
+        };
+
+        if self.try_parse_kw(Keyword::In).is_none() {
+            return self.make_decl(ast::Decl::Let(ast::Let::DeclExpr(f, e)));
+        };
+
+        let Some(r) = self.parse_expr(Precedence::TyAnn) else {
+            let decl = self.make_decl(ast::Decl::Let(ast::Let::DeclExpr(f, e)));
+            return self.make_err_decl(AstError::MissingExpr, decl);
+        };
+
+        self.make_decl(ast::Decl::Let(ast::Let::DeclExprIn(f, e, r)))
+    }
+
+    fn parse_expr(&mut self, pred: Precedence) -> Option<ast::ExprId> {
         match pred {
             Precedence::TyAnn => {
-                let expr = self
-                    .parse_expr(Precedence::App)
-                    .unwrap_or_else(|| self.arena.alloc_expr(ast::Expr::Error)); // missed opportunity to report error
+                let expr = match self.parse_expr(Precedence::App) {
+                    Some(e) => e,
+                    None => self.report_expr_err(AstError::MissingExpr),
+                };
 
                 if self.try_parse_operator(':').is_none() {
                     return Some(expr);
@@ -221,46 +198,136 @@ impl<'ast> Parser<'ast> {
 
                 // Beautiful, beautiful Curry-Howard correspondence.
                 // No need for a whole separate language for types. :)
-                let ty = self
-                    .parse_expr(Precedence::App)
-                    .unwrap_or_else(|| self.arena.alloc_expr(ast::Expr::Error)); // missed opportunity to report error
+                let ty = match self.parse_expr(Precedence::App) {
+                    Some(e) => e,
+                    None => self.report_expr_err(AstError::MissingExpr),
+                };
 
-                Some(self.arena.alloc_expr(ast::Expr::Ann(expr, ty)))
+                Some(self.make_expr(ast::Expr::Ann(expr, ty)))
             }
-            Precedence::App => todo!(),
-            Precedence::Atom => todo!(),
+            Precedence::App => {
+                let tok = self.next()?;
+
+                match tok.kind {
+                    TokenKind::Unknown(_) => todo!(),
+                    TokenKind::Kw(Keyword::Module) => todo!(),
+                    TokenKind::Kw(Keyword::Import) => todo!(),
+                    TokenKind::Kw(Keyword::Struct) => todo!(),
+                    TokenKind::Kw(Keyword::Data) => todo!(),
+                    TokenKind::Kw(Keyword::Let) => todo!(),
+                    TokenKind::Kw(Keyword::Do) => todo!(),
+                    TokenKind::Kw(Keyword::In) => todo!(),
+                    TokenKind::Ident(ident) => {
+                        let sym = Symbol(ident.to_string());
+                        Some(self.make_expr(ast::Expr::Var(sym)))
+                    }
+                    TokenKind::Numeral(n) => {
+                        let str = n.to_string();
+                        Some(self.make_expr(ast::Expr::Num(str)))
+                    }
+                    TokenKind::Operator(_) => todo!(),
+                    TokenKind::Delimiter(Delimiter::Paren(Gate::Opened)) => {
+                        // Two missed opportunities to report errors.
+                        let e = self.parse_expr(Precedence::Assoc);
+                        self.try_parse_delimiter(Delimiter::Paren(Gate::Closed));
+                        e
+                    }
+                    TokenKind::Delimiter(Delimiter::Brace(Gate::Opened)) => todo!(),
+                    TokenKind::Delimiter(Delimiter::Bracket(Gate::Opened)) => todo!(),
+                    TokenKind::Delimiter(
+                        d @ (Delimiter::Paren(Gate::Closed)
+                        | Delimiter::Brace(Gate::Closed)
+                        | Delimiter::Bracket(Gate::Closed)),
+                    ) => Some(self.report_expr_err(AstError::Imbalanced(d.clone()))),
+                }
+            }
+            Precedence::Assoc => {
+                let tok = self.next()?;
+
+                match tok.kind {
+                    TokenKind::Unknown(_) => todo!(),
+                    TokenKind::Kw(_) => todo!(),
+                    TokenKind::Ident(_) => todo!(),
+                    TokenKind::Numeral(_) => todo!(),
+                    TokenKind::Operator(_) => todo!(),
+                    TokenKind::Delimiter(_) => todo!(),
+                }
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ParseResult, Parser};
+    use super::ast::{Expr, Let, Symbol};
+    use super::{AstAllocator, Parser};
 
     #[test]
     fn parse_nothing() {
-        let result = Parser::parse("".to_string());
-        assert!(matches!(result, ParseResult::Success { .. }))
+        let mut arena = AstAllocator::default();
+        let mut parser = Parser::new("", &mut arena);
+
+        let result = parser.parse();
+        assert!(result.decls.is_empty());
     }
 
     #[test]
     fn parse_import_decl() {
-        let result = Parser::parse("import A.B.C".to_string());
-        let program = result.get_program();
-        assert_eq!(program.decls.len(), 1);
+        let mut arena = AstAllocator::default();
+        let mut parser = Parser::new("import A.B.C", &mut arena);
 
-        let import_decl_id = program.decls[0];
+        let result = parser.parse();
+        assert_eq!(result.decls.len(), 1);
+
+        let import_decl_id = result.decls[0];
         let import_decl = result.get_decl(import_decl_id).get_import().unwrap();
         assert_eq!(import_decl.path, vec!["A", "B", "C"]);
     }
 
     #[test]
-    fn parse_let_decl() {
-        let result = Parser::parse("let id x = x".to_string());
-        let program = result.get_program();
-        assert_eq!(program.decls.len(), 1);
+    fn parse_let_five_be_5() {
+        let mut arena = AstAllocator::default();
+        let mut parser = Parser::new("let five = 5", &mut arena);
 
-        let let_decl_id = program.decls[0];
+        let result = parser.parse();
+        assert_eq!(result.decls.len(), 1);
+
+        let let_decl_id = result.decls[0];
+    }
+
+    #[test]
+    fn parse_let_paren_x_paren_be_2() {
+        let mut arena = AstAllocator::default();
+        let mut parser = Parser::new("let (x) = 2", &mut arena);
+
+        let result = parser.parse();
+        assert_eq!(result.decls.len(), 1);
+
+        let let_decl_id = result.decls[0];
+        let let_decl = result.get_decl(let_decl_id).get_let().unwrap();
+    }
+
+    #[test]
+    fn parse_let_id_which_is_a_to_a() {
+        let mut arena = AstAllocator::default();
+        let mut parser = Parser::new("let id : a -> a", &mut arena);
+
+        let result = parser.parse();
+        assert_eq!(result.decls.len(), 1);
+
+        let let_decl_id = result.decls[0];
+        let let_decl = result.get_decl(let_decl_id).get_let().unwrap();
+    }
+
+    #[test]
+    fn parse_let_id_x_be_x() {
+        let mut arena = AstAllocator::default();
+        let mut parser = Parser::new("let id x = x", &mut arena);
+
+        let result = parser.parse();
+        assert_eq!(result.decls.len(), 1);
+
+        let let_decl_id = result.decls[0];
         let let_decl = result.get_decl(let_decl_id).get_let().unwrap();
     }
 }

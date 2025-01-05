@@ -1,34 +1,28 @@
 use std::marker::PhantomData;
 
-pub(crate) struct Slab<'a, T> {
+pub(crate) struct Slab<T> {
     vec: Vec<T>,
-    _marker: PhantomData<&'a ()>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub(crate) struct SlabId<'a>(usize, PhantomData<&'a ()>);
+pub(crate) struct SlabId(usize);
 
-impl<'a, T> Slab<'a, T> {
-    pub(crate) fn insert(&mut self, item: T) -> SlabId<'a> {
+impl<T> Slab<T> {
+    pub(crate) fn insert(&mut self, item: T) -> SlabId {
         let id = self.vec.len();
         self.vec.push(item);
-        SlabId(id, PhantomData)
+        SlabId(id)
     }
 
-    pub(crate) fn get(&self, SlabId(id, _): SlabId<'a>) -> &T {
+    pub(crate) fn get(&self, SlabId(id): SlabId) -> &T {
         &self.vec[id]
-    }
-
-    pub(crate) fn get_mut(&mut self, SlabId(id, _): SlabId<'a>) -> &mut T {
-        &mut self.vec[id]
     }
 }
 
-impl<'a, T> Default for Slab<'a, T> {
-    fn default() -> Slab<'a, T> {
+impl<T> Default for Slab<T> {
+    fn default() -> Slab<T> {
         Slab {
             vec: Vec::default(),
-            _marker: PhantomData,
         }
     }
 }

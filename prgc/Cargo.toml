@@ -3,4 +3,5 @@ name = "prgc"
 edition = "2021"
 
 [dependencies]
+clap = { version = "4.5.23", features = ["derive"] }
 peregrine = { path = "../peregrine" }

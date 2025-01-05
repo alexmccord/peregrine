@@ -1,45 +1,49 @@
+use std::collections::HashMap;
+
 use crate::syntax::slab;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub struct ExprId<'ast>(slab::SlabId<'ast>);
+use super::cursor::Delimiter;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub struct DeclId<'ast>(slab::SlabId<'ast>);
+pub struct ExprId(slab::SlabId);
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub struct DeclId(slab::SlabId);
 
 #[derive(Default)]
-pub struct AstAllocator<'ast> {
-    exprs: slab::Slab<'ast, Expr<'ast>>,
-    decls: slab::Slab<'ast, Decl<'ast>>,
+pub struct AstAllocator {
+    exprs: slab::Slab<Expr>,
+    decls: slab::Slab<Decl>,
 }
 
-impl<'ast> AstAllocator<'ast> {
-    pub fn alloc_expr(&mut self, expr: Expr<'ast>) -> ExprId<'ast> {
+impl AstAllocator {
+    pub fn alloc_expr(&mut self, expr: Expr) -> ExprId {
         ExprId(self.exprs.insert(expr))
     }
 
-    pub fn alloc_decl(&mut self, decl: Decl<'ast>) -> DeclId<'ast> {
+    pub fn alloc_decl(&mut self, decl: Decl) -> DeclId {
         DeclId(self.decls.insert(decl))
     }
+}
 
-    pub fn get_expr(&self, ExprId(id): ExprId<'ast>) -> &Expr<'ast> {
-        self.exprs.get(id)
-    }
-
-    pub fn get_decl(&self, DeclId(id): DeclId<'ast>) -> &Decl<'ast> {
-        self.decls.get(id)
-    }
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum AstError {
+    MissingName,
+    MissingExpr,
+    Imbalanced(Delimiter),
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub struct Symbol(pub String);
 
 #[derive(Debug)]
-pub enum Expr<'ast> {
+pub enum Expr {
     Var(Symbol),
-    Lam(ExprId<'ast>, ExprId<'ast>),
-    App(ExprId<'ast>, ExprId<'ast>),
-    Ann(ExprId<'ast>, ExprId<'ast>),
-    Error,
+    Lam(ExprId, ExprId),
+    App(ExprId, ExprId),
+    Ann(ExprId, ExprId),
+    Num(String),
+    Error(AstError, Option<ExprId>),
 }
 
 #[derive(Debug)]
@@ -55,31 +59,32 @@ pub struct Import {
 // struct e where
 // struct e : T where
 #[derive(Debug)]
-pub struct Struct<'ast>(pub ExprId<'ast>);
+pub struct Struct(pub ExprId);
 
 #[derive(Debug)]
-pub struct Data<'ast>(pub ExprId<'ast>);
+pub struct Data(pub ExprId);
 
 #[derive(Debug)]
-pub enum Let<'ast> {
+pub enum Let {
     // let f : Nat -> Nat
-    Decl(ExprId<'ast>),
+    Decl(ExprId),
     // let x = 5
-    Assign(ExprId<'ast>, ExprId<'ast>),
+    DeclExpr(ExprId, ExprId),
     // let add2 x = x + 2 in add2 5
-    Scoped(ExprId<'ast>, ExprId<'ast>, ExprId<'ast>),
+    DeclExprIn(ExprId, ExprId, ExprId),
 }
 
 #[derive(Debug)]
-pub enum Decl<'ast> {
+pub enum Decl {
     Module(Module),
     Import(Import),
-    Struct(Struct<'ast>),
-    Data(Data<'ast>),
-    Let(Let<'ast>),
+    Struct(Struct),
+    Data(Data),
+    Let(Let),
+    Error(AstError, Option<DeclId>),
 }
 
-impl<'ast> Decl<'ast> {
+impl Decl {
     pub fn get_module(&self) -> Option<&Module> {
         match self {
             Decl::Module(module) => Some(module),
@@ -116,17 +121,21 @@ impl<'ast> Decl<'ast> {
     }
 }
 
-#[derive(Debug)]
 pub struct Program<'ast> {
-    pub decls: Vec<DeclId<'ast>>,
+    arena: &'ast AstAllocator,
+    pub decls: Vec<DeclId>,
 }
 
 impl<'ast> Program<'ast> {
-    pub fn new() -> Program<'ast> {
-        Program { decls: Vec::new() }
+    pub fn new(arena: &'ast AstAllocator, decls: Vec<DeclId>) -> Program<'ast> {
+        Program { arena, decls }
     }
 
-    pub fn push(&mut self, decl: DeclId<'ast>) {
-        self.decls.push(decl)
+    pub fn get_expr(&self, ExprId(id): ExprId) -> &Expr {
+        self.arena.exprs.get(id)
+    }
+
+    pub fn get_decl(&self, DeclId(id): DeclId) -> &Decl {
+        self.arena.decls.get(id)
     }
 }
