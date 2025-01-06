@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 pub(crate) struct Slab<T> {
     vec: Vec<T>,
 }

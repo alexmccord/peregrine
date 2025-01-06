@@ -82,10 +82,6 @@ where
         })
     }
 
-    fn try_parse_ident(&mut self) -> Option<Token> {
-        self.try_consume(|tok| tok.get_ident().is_some())
-    }
-
     fn make_err_expr(&mut self, err: AstError, expr: ast::ExprId) -> ast::ExprId {
         self.arena.alloc_expr(ast::Expr::Error(err, Some(expr)))
     }
@@ -187,23 +183,30 @@ where
     fn parse_expr(&mut self, pred: Precedence) -> Option<ast::ExprId> {
         match pred {
             Precedence::TyAnn => {
-                let expr = match self.parse_expr(Precedence::App) {
-                    Some(e) => e,
-                    None => self.report_expr_err(AstError::MissingExpr),
-                };
+                let expr = self.parse_expr(Precedence::App);
 
                 if self.try_parse_operator(':').is_none() {
-                    return Some(expr);
+                    return expr;
                 };
 
                 // Beautiful, beautiful Curry-Howard correspondence.
                 // No need for a whole separate language for types. :)
-                let ty = match self.parse_expr(Precedence::App) {
-                    Some(e) => e,
-                    None => self.report_expr_err(AstError::MissingExpr),
-                };
+                let ty = self.parse_expr(Precedence::App);
 
-                Some(self.make_expr(ast::Expr::Ann(expr, ty)))
+                match (expr, ty) {
+                    (Some(expr), Some(ty)) => Some(self.make_expr(ast::Expr::Ann(expr, ty))),
+                    (Some(expr), None) => {
+                        let ty = self.report_expr_err(AstError::MissingExpr);
+                        let ann = self.make_expr(ast::Expr::Ann(expr, ty));
+                        Some(self.make_err_expr(AstError::MissingExpr, ann))
+                    }
+                    (None, Some(ty)) => {
+                        let expr = self.report_expr_err(AstError::MissingExpr);
+                        let ann = self.make_expr(ast::Expr::Ann(expr, ty));
+                        Some(self.make_err_expr(AstError::MissingExpr, ann))
+                    }
+                    (None, None) => Some(self.report_expr_err(AstError::MissingExpr)),
+                }
             }
             Precedence::App => {
                 let tok = self.next()?;
@@ -259,7 +262,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::ast::{Expr, Let, Symbol};
     use super::{AstAllocator, Parser};
 
     #[test]
