@@ -1,5 +1,5 @@
 [package]
-name = "prgc"
+name = "eyrie"
 edition = "2021"
 
 [dependencies]
