@@ -16,10 +16,7 @@ pub struct Parser<'input, 'ast> {
     lookahead: Option<Token>,
 }
 
-impl<'input, 'ast> Parser<'input, 'ast>
-where
-    'ast: 'input,
-{
+impl<'input, 'ast> Parser<'input, 'ast> {
     pub fn new(input: &'input str, arena: &'ast mut AstAllocator) -> Parser<'input, 'ast> {
         Parser {
             lexer: Lexer::new(input),
