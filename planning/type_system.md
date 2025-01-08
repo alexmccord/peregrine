@@ -15,7 +15,7 @@ One issue I ran into in Haskell is the classic "how to annotate your AST" proble
 ```hs
 data Expr where
   Var :: Symbol         -> Expr
-  Lam :: Symbol -> Expr -> Expr
+  Lam :: Expr   -> Expr -> Expr
   App :: Expr   -> Expr -> Expr
 ```
 
@@ -26,7 +26,7 @@ You could parameterize `Expr` with `a` and put it on every data constructors.
 ```hs
 data Expr a where
   Var :: a -> Symbol           -> Expr a
-  Lam :: a -> Symbol -> Expr a -> Expr a
+  Lam :: a -> Expr a -> Expr a -> Expr a
   App :: a -> Expr a -> Expr a -> Expr a
 ```
 
@@ -37,7 +37,7 @@ Another approach is, again by parameterizing `Expr` with `a`, except you replace
 ```hs
 data ExprF a where
   Var :: Symbol ->      Expr a
-  Lam :: Symbol -> a -> Expr a
+  Lam :: a      -> a -> Expr a
   App :: a      -> a -> Expr a
 
 newtype Fix f = Fix { unFix :: f (Fix f) }
@@ -52,7 +52,7 @@ The third approach, is to add one extra data constructor, called `Ann`.
 ```hs
 data Expr a where
   Var :: Symbol           -> Expr a
-  Lam :: Symbol -> Expr a -> Expr a
+  Lam :: Expr a -> Expr a -> Expr a
   App :: Expr a -> Expr a -> Expr a
   Ann :: a      -> Expr a -> Expr a
 ```
@@ -71,7 +71,7 @@ Then our data type `Expr` here
 ```hs
 data Expr where
   Var :: Symbol         -> Expr
-  Lam :: Symbol -> Expr -> Expr
+  Lam :: Expr   -> Expr -> Expr
   App :: Expr   -> Expr -> Expr
 ```
 
@@ -82,7 +82,7 @@ is actually, from the lens of the compiler, written as
 -- that users will never see.
 data $Expr a where
   Var :: Symbol      -> $Expr a
-  Lam :: Symbol -> a -> $Expr a
+  Lam :: a      -> a -> $Expr a
   App :: a      -> a -> $Expr a
 
 -- This is what the user gets when they refer
@@ -103,8 +103,8 @@ Where `(y f)` is pattern matching on the provided type, extracting `f`, and then
 ```hs
 depth :: FAlgebra Expr Int
 depth (Var _) = 0
-depth (Lam _ e) = 1 + e       -- e :: Int
-depth (App l e) = 1 + max l e -- l :: Int and e :: Int
+depth (Lam x e) = 1 + max x e -- x :: Int and e :: Int
+depth (App f e) = 1 + max f e -- f :: Int and e :: Int
 ```
 
 And the function application `FAlgebra Expr Int` matches the pattern in the equation `FAlgebra (y f) a` by unification: `(y $Expr) Int` and returns the type `$Expr Int -> Int`. The `(y $Expr)` pattern replaces `Expr` with `Int` as the term of the data structure.

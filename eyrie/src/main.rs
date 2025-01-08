@@ -27,4 +27,5 @@ fn build(build: Build) {
 
     let mut driver = BuildDriver::new();
     driver.submit_task(BuildTask::Project(prg));
+    driver.execute();
 }

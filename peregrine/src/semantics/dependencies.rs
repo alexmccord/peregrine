@@ -30,8 +30,7 @@ mod tests {
     #[test]
     fn empty_imports() {
         let mut arena = AstAllocator::default();
-        let mut parser = Parser::new("", &mut arena);
-        let result = parser.parse();
+        let result = Parser::parse("".to_string(), &mut arena);
 
         let deps = Dependencies::get(&result);
         assert!(deps.imports.is_empty());
@@ -40,8 +39,7 @@ mod tests {
     #[test]
     fn import_something() {
         let mut arena = AstAllocator::default();
-        let mut parser = Parser::new("import A", &mut arena);
-        let result = parser.parse();
+        let result = Parser::parse("import A".to_string(), &mut arena);
 
         let deps = Dependencies::get(&result);
         assert_eq!(deps.imports.len(), 1);
@@ -51,8 +49,7 @@ mod tests {
     #[test]
     fn import_a_bunch() {
         let mut arena = AstAllocator::default();
-        let mut parser = Parser::new("import A\nimport A.B\nimport A.B.C", &mut arena);
-        let result = parser.parse();
+        let result = Parser::parse("import A\nimport A.B\nimport A.B.C".to_string(), &mut arena);
 
         let deps = Dependencies::get(&result);
         assert_eq!(deps.imports.len(), 3);

@@ -86,13 +86,13 @@ impl Grapheme {
     }
 }
 
-pub struct Cursor<'input> {
-    input: &'input str,
+pub struct Cursor {
+    input: String,
     offset: usize,
 }
 
-impl<'input> Cursor<'input> {
-    pub fn new(input: &'input str) -> Cursor<'input> {
+impl Cursor {
+    pub fn new(input: String) -> Cursor {
         Cursor { input, offset: 0 }
     }
 
@@ -100,7 +100,7 @@ impl<'input> Cursor<'input> {
         self.offset
     }
 
-    pub fn slice(&'input self, i: usize, j: usize) -> &'input str {
+    pub fn slice(&self, i: usize, j: usize) -> &str {
         &self.input[i..j]
     }
 
@@ -166,7 +166,7 @@ impl<'input> Cursor<'input> {
     }
 }
 
-impl<'a> Iterator for Cursor<'a> {
+impl Iterator for Cursor {
     type Item = Grapheme;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -188,7 +188,7 @@ mod tests {
     fn get_alpha_lowercase() {
         for c in 'a'..='z' {
             let str = c.to_string();
-            let cursor = Cursor::new(&str);
+            let cursor = Cursor::new(str);
             assert_eq!(cursor.get(), Grapheme::Alpha(Alpha(c)));
         }
     }
@@ -197,7 +197,7 @@ mod tests {
     fn get_alpha_uppercase() {
         for c in 'A'..='Z' {
             let str = c.to_string();
-            let cursor = Cursor::new(&str);
+            let cursor = Cursor::new(str);
             assert_eq!(cursor.get(), Grapheme::Alpha(Alpha(c)));
         }
     }
@@ -206,20 +206,20 @@ mod tests {
     fn get_digit() {
         for c in '0'..='9' {
             let str = c.to_string();
-            let cursor = Cursor::new(&str);
+            let cursor = Cursor::new(str);
             assert_eq!(cursor.get(), Grapheme::Digit(Digit(c)));
         }
     }
 
     #[test]
     fn get_eof() {
-        let cursor = Cursor::new("");
+        let cursor = Cursor::new("".to_string());
         assert_eq!(cursor.get(), Grapheme::Eof);
     }
 
     #[test]
     fn get_all() {
-        let mut cursor = Cursor::new("abAB12");
+        let mut cursor = Cursor::new("abAB12".to_string());
         assert_eq!(cursor.next(), Some(Grapheme::Alpha(Alpha('a'))));
         assert_eq!(cursor.next(), Some(Grapheme::Alpha(Alpha('b'))));
         assert_eq!(cursor.next(), Some(Grapheme::Alpha(Alpha('A'))));
@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn get_newlines() {
-        let mut cursor = Cursor::new("\r\n\n");
+        let mut cursor = Cursor::new("\r\n\n".to_string());
         assert_eq!(cursor.next(), Some(Grapheme::Newline(Newline::CRLF)));
         assert_eq!(cursor.next(), Some(Grapheme::Newline(Newline::LF)));
         assert_eq!(cursor.next(), None);

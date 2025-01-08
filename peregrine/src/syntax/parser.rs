@@ -10,14 +10,14 @@ pub enum Precedence {
     Assoc, // (e)
 }
 
-pub struct Parser<'input, 'ast> {
-    lexer: Lexer<'input>,
+pub struct Parser<'ast> {
+    lexer: Lexer,
     arena: &'ast mut AstAllocator,
     lookahead: Option<Token>,
 }
 
-impl<'input, 'ast> Parser<'input, 'ast> {
-    pub fn new(input: &'input str, arena: &'ast mut AstAllocator) -> Parser<'input, 'ast> {
+impl<'ast> Parser<'ast> {
+    fn new(input: String, arena: &'ast mut AstAllocator) -> Parser<'ast> {
         Parser {
             lexer: Lexer::new(input),
             arena,
@@ -25,8 +25,9 @@ impl<'input, 'ast> Parser<'input, 'ast> {
         }
     }
 
-    pub fn parse(&mut self) -> Program {
-        self.parse_program()
+    pub fn parse(input: String, arena: &'ast mut AstAllocator) -> Program<'ast> {
+        let parser = Parser::new(input, arena);
+        parser.parse_program()
     }
 
     fn next(&mut self) -> Option<Token> {
@@ -103,14 +104,14 @@ impl<'input, 'ast> Parser<'input, 'ast> {
         self.arena.alloc_decl(decl)
     }
 
-    fn parse_program(&mut self) -> ast::Program {
+    fn parse_program(mut self) -> ast::Program<'ast> {
         let mut decls = Vec::new();
 
         while let Some(decl) = self.parse_top_level() {
             decls.push(decl);
         }
 
-        ast::Program::new(&self.arena, decls)
+        ast::Program::new(self.arena, decls)
     }
 
     fn parse_top_level(&mut self) -> Option<ast::DeclId> {
@@ -264,18 +265,14 @@ mod tests {
     #[test]
     fn parse_nothing() {
         let mut arena = AstAllocator::default();
-        let mut parser = Parser::new("", &mut arena);
-
-        let result = parser.parse();
+        let result = Parser::parse("".to_string(), &mut arena);
         assert!(result.decls.is_empty());
     }
 
     #[test]
     fn parse_import_decl() {
         let mut arena = AstAllocator::default();
-        let mut parser = Parser::new("import A.B.C", &mut arena);
-
-        let result = parser.parse();
+        let result = Parser::parse("import A.B.C".to_string(), &mut arena);
         assert_eq!(result.decls.len(), 1);
 
         let import_decl_id = result.decls[0];
@@ -286,9 +283,7 @@ mod tests {
     #[test]
     fn parse_let_five_be_5() {
         let mut arena = AstAllocator::default();
-        let mut parser = Parser::new("let five = 5", &mut arena);
-
-        let result = parser.parse();
+        let result = Parser::parse("let five = 5".to_string(), &mut arena);
         assert_eq!(result.decls.len(), 1);
 
         let let_decl_id = result.decls[0];
@@ -297,9 +292,7 @@ mod tests {
     #[test]
     fn parse_let_paren_x_paren_be_2() {
         let mut arena = AstAllocator::default();
-        let mut parser = Parser::new("let (x) = 2", &mut arena);
-
-        let result = parser.parse();
+        let result = Parser::parse("let (x) = 2".to_string(), &mut arena);
         assert_eq!(result.decls.len(), 1);
 
         let let_decl_id = result.decls[0];
@@ -309,9 +302,7 @@ mod tests {
     #[test]
     fn parse_let_id_which_is_a_to_a() {
         let mut arena = AstAllocator::default();
-        let mut parser = Parser::new("let id : a -> a", &mut arena);
-
-        let result = parser.parse();
+        let result = Parser::parse("let id : a -> a".to_string(), &mut arena);
         assert_eq!(result.decls.len(), 1);
 
         let let_decl_id = result.decls[0];
@@ -321,9 +312,7 @@ mod tests {
     #[test]
     fn parse_let_id_x_be_x() {
         let mut arena = AstAllocator::default();
-        let mut parser = Parser::new("let id x = x", &mut arena);
-
-        let result = parser.parse();
+        let result = Parser::parse("let id x = x".to_string(), &mut arena);
         assert_eq!(result.decls.len(), 1);
 
         let let_decl_id = result.decls[0];

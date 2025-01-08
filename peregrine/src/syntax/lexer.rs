@@ -120,12 +120,12 @@ pub enum ScanCommand {
     Error,
 }
 
-pub struct Lexer<'input> {
-    cursor: Cursor<'input>,
+pub struct Lexer {
+    cursor: Cursor,
 }
 
-impl<'input> Lexer<'input> {
-    pub fn new(input: &str) -> Lexer {
+impl Lexer {
+    pub fn new(input: String) -> Lexer {
         Lexer {
             cursor: Cursor::new(input),
         }
@@ -261,7 +261,7 @@ mod tests {
 
     #[test]
     fn scan_unknown() {
-        let mut lexer = Lexer::new("@@@");
+        let mut lexer = Lexer::new("@@@".to_string());
         assert_eq!(lexer.next(), Some(Token::unknown("@@@")));
     }
 
@@ -277,39 +277,39 @@ mod tests {
         kws.push(("in", Keyword::In));
 
         for (str, kw) in kws {
-            let mut lexer = Lexer::new(str);
+            let mut lexer = Lexer::new(str.to_string());
             assert_eq!(lexer.next(), Some(Token::kw(kw)));
         }
     }
 
     #[test]
     fn scan_ident() {
-        let mut lexer = Lexer::new("abc");
+        let mut lexer = Lexer::new("abc".to_string());
         assert_eq!(lexer.next(), Some(Token::ident("abc")));
     }
 
     #[test]
     fn scan_ident_with_numerals() {
-        let mut lexer = Lexer::new("abc12");
+        let mut lexer = Lexer::new("abc12".to_string());
         assert_eq!(lexer.next(), Some(Token::ident("abc12")));
     }
 
     #[test]
     fn identifiers_dont_start_with_digits() {
-        let mut lexer = Lexer::new("1abc");
+        let mut lexer = Lexer::new("1abc".to_string());
         assert_eq!(lexer.next(), Some(Token::unknown("1")));
     }
 
     #[test]
     fn multiple_tokens() {
-        let mut lexer = Lexer::new("abc 123");
+        let mut lexer = Lexer::new("abc 123".to_string());
         assert_eq!(lexer.next(), Some(Token::ident("abc")));
         assert_eq!(lexer.next(), Some(Token::numeral("123")));
     }
 
     #[test]
     fn scan_operators() {
-        let mut lexer = Lexer::new(". .. .| ~ && ~()");
+        let mut lexer = Lexer::new(". .. .| ~ && ~()".to_string());
         assert_eq!(lexer.next(), Some(Token::operator(".")));
         assert_eq!(lexer.next(), Some(Token::operator("..")));
         assert_eq!(lexer.next(), Some(Token::operator(".|")));

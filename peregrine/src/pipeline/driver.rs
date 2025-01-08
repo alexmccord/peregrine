@@ -1,21 +1,42 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 
-use crate::syntax::ast::Program;
+use crate::syntax::ast::{AstAllocator, DeclId, ExprId, Program};
 use crate::syntax::parser::Parser;
 
+#[derive(Debug)]
 pub enum BuildTask {
     Project(PathBuf),
 }
 
-pub struct BuildDriver {
-    pending: VecDeque<BuildTask>,
+#[derive(Default)]
+pub struct Analysis<T> {
+    decls: HashMap<DeclId, T>,
+    exprs: HashMap<ExprId, T>,
 }
 
-impl BuildDriver {
-    pub fn new() -> BuildDriver {
+struct Module<'ast> {
+    program: Program<'ast>,
+}
+
+impl<'ast> Module<'ast> {
+    fn new(program: Program<'ast>) -> Module<'ast> {
+        Module { program }
+    }
+}
+
+pub struct BuildDriver<'ast> {
+    pending: VecDeque<BuildTask>,
+    allocators: HashMap<PathBuf, AstAllocator>,
+    modules: HashMap<PathBuf, Module<'ast>>,
+}
+
+impl<'ast> BuildDriver<'ast> {
+    pub fn new() -> BuildDriver<'ast> {
         BuildDriver {
             pending: VecDeque::default(),
+            allocators: HashMap::default(),
+            modules: HashMap::default(),
         }
     }
 
@@ -31,5 +52,23 @@ impl BuildDriver {
         }
     }
 
-    fn build_project(&mut self, path: PathBuf) {}
+    fn build_project(&mut self, path: PathBuf) {
+        //
+    }
+
+    fn build_module(&'ast mut self, path: PathBuf) {
+        if !path.is_file() || !path.ends_with(".prg") {
+            return;
+        }
+
+        let entry = self
+            .allocators
+            .entry(path.clone())
+            .or_insert(AstAllocator::default());
+
+        let content = std::fs::read_to_string(path.clone()).unwrap();
+        let result = Parser::parse(content, entry);
+
+        self.modules.insert(path, Module::new(result));
+    }
 }
