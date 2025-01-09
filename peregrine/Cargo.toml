@@ -3,4 +3,4 @@ name = "peregrine"
 edition = "2021"
 
 [dependencies]
-typed-arena = "2.0"
+id-arena = "2.2.1"

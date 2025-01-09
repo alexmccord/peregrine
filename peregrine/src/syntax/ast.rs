@@ -1,26 +1,21 @@
-use crate::syntax::slab;
-
 use super::cursor::Delimiter;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub struct ExprId(slab::SlabId);
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub struct DeclId(slab::SlabId);
+pub type ExprId = id_arena::Id<Expr>;
+pub type DeclId = id_arena::Id<Decl>;
 
 #[derive(Default)]
 pub struct AstAllocator {
-    exprs: slab::Slab<Expr>,
-    decls: slab::Slab<Decl>,
+    exprs: id_arena::Arena<Expr>,
+    decls: id_arena::Arena<Decl>,
 }
 
 impl AstAllocator {
     pub fn alloc_expr(&mut self, expr: Expr) -> ExprId {
-        ExprId(self.exprs.insert(expr))
+        self.exprs.alloc(expr)
     }
 
     pub fn alloc_decl(&mut self, decl: Decl) -> DeclId {
-        DeclId(self.decls.insert(decl))
+        self.decls.alloc(decl)
     }
 }
 
@@ -129,11 +124,11 @@ impl<'ast> Program<'ast> {
         Program { arena, decls }
     }
 
-    pub fn get_expr(&self, ExprId(id): ExprId) -> &Expr {
-        self.arena.exprs.get(id)
+    pub fn get_expr(&self, id: ExprId) -> &Expr {
+        &self.arena.exprs[id]
     }
 
-    pub fn get_decl(&self, DeclId(id): DeclId) -> &Decl {
-        self.arena.decls.get(id)
+    pub fn get_decl(&self, id: DeclId) -> &Decl {
+        &self.arena.decls[id]
     }
 }
