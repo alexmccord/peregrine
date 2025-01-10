@@ -9,7 +9,7 @@ impl<'ast> Dependencies<'ast> {
         Dependencies { imports }
     }
 
-    pub fn get(program: &'ast ast::Program<'ast>) -> Dependencies<'ast> {
+    pub fn get(program: &'ast ast::Program) -> Dependencies<'ast> {
         let mut vec = Vec::default();
 
         for &decl in &program.decls {
@@ -25,12 +25,11 @@ impl<'ast> Dependencies<'ast> {
 #[cfg(test)]
 mod tests {
     use super::Dependencies;
-    use crate::syntax::{ast::AstAllocator, parser::Parser};
+    use crate::syntax::parser::Parser;
 
     #[test]
     fn empty_imports() {
-        let mut arena = AstAllocator::default();
-        let result = Parser::parse("".to_string(), &mut arena);
+        let result = Parser::parse("".to_string());
 
         let deps = Dependencies::get(&result);
         assert!(deps.imports.is_empty());
@@ -38,8 +37,7 @@ mod tests {
 
     #[test]
     fn import_something() {
-        let mut arena = AstAllocator::default();
-        let result = Parser::parse("import A".to_string(), &mut arena);
+        let result = Parser::parse("import A".to_string());
 
         let deps = Dependencies::get(&result);
         assert_eq!(deps.imports.len(), 1);
@@ -48,8 +46,7 @@ mod tests {
 
     #[test]
     fn import_a_bunch() {
-        let mut arena = AstAllocator::default();
-        let result = Parser::parse("import A\nimport A.B\nimport A.B.C".to_string(), &mut arena);
+        let result = Parser::parse("import A\nimport A.B\nimport A.B.C".to_string());
 
         let deps = Dependencies::get(&result);
         assert_eq!(deps.imports.len(), 3);

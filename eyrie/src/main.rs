@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap;
 
-use peregrine::pipeline::driver::{BuildDriver, BuildTask};
+use peregrine::pipeline::driver::{BuildDriver, Task};
 
 #[derive(clap::Parser, Debug)]
 struct Build {
@@ -26,6 +26,6 @@ fn build(build: Build) {
     let prg = build.dir.unwrap();
 
     let mut driver = BuildDriver::new();
-    driver.submit_task(BuildTask::Project(prg));
+    driver.submit_task(Task::SetupProject(prg));
     driver.execute();
 }

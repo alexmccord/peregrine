@@ -4,17 +4,17 @@ pub type ExprId = id_arena::Id<Expr>;
 pub type DeclId = id_arena::Id<Decl>;
 
 #[derive(Default)]
-pub struct AstAllocator {
+pub(crate) struct AstAllocator {
     exprs: id_arena::Arena<Expr>,
     decls: id_arena::Arena<Decl>,
 }
 
 impl AstAllocator {
-    pub fn alloc_expr(&mut self, expr: Expr) -> ExprId {
+    pub(crate) fn alloc_expr(&mut self, expr: Expr) -> ExprId {
         self.exprs.alloc(expr)
     }
 
-    pub fn alloc_decl(&mut self, decl: Decl) -> DeclId {
+    pub(crate) fn alloc_decl(&mut self, decl: Decl) -> DeclId {
         self.decls.alloc(decl)
     }
 }
@@ -114,14 +114,17 @@ impl Decl {
     }
 }
 
-pub struct Program<'ast> {
-    arena: &'ast AstAllocator,
+pub struct Program {
+    arena: Box<AstAllocator>,
     pub decls: Vec<DeclId>,
 }
 
-impl<'ast> Program<'ast> {
-    pub fn new(arena: &'ast AstAllocator, decls: Vec<DeclId>) -> Program<'ast> {
-        Program { arena, decls }
+impl Program {
+    pub fn new(arena: AstAllocator, decls: Vec<DeclId>) -> Program {
+        Program {
+            arena: Box::new(arena),
+            decls,
+        }
     }
 
     pub fn get_expr(&self, id: ExprId) -> &Expr {
