@@ -72,6 +72,7 @@ impl Sem {
 
 pub struct ProgramSem {
     semantics: HashMap<ExprId, Sem>,
+    // Maps consequent nodes to their antecedents.
     antecedents: HashMap<AstId, AstId>,
 }
 
@@ -106,10 +107,10 @@ impl<'ast> ProgramSemBuilder<'ast> {
         }
     }
 
-    fn add_edge(&mut self, antecedent: impl Into<AstId>, child: impl Into<AstId>) {
-        let child = child.into();
-        self.antecedents.insert(child, antecedent.into());
-        self.queue.push_back(child);
+    fn add_edge(&mut self, antecedent: impl Into<AstId>, consequent: impl Into<AstId>) {
+        let consequent = consequent.into();
+        self.antecedents.insert(consequent, antecedent.into());
+        self.queue.push_back(consequent);
     }
 
     fn build(mut self) -> ProgramSem {
