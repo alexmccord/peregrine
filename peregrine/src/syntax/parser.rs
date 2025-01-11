@@ -265,51 +265,59 @@ mod tests {
     #[test]
     fn parse_nothing() {
         let result = Parser::parse("".to_string());
-        assert!(result.decls.is_empty());
+        assert_eq!(result.decls().next(), None);
     }
 
     #[test]
     fn parse_import_decl() {
         let result = Parser::parse("import A.B.C".to_string());
-        assert_eq!(result.decls.len(), 1);
+        let mut iter = result.decls();
 
-        let import_decl_id = result.decls[0];
-        let import_decl = result.get_decl(import_decl_id).get_import().unwrap();
+        let import_decl_id = iter.next().unwrap();
+        let import_decl = result.get_decl(*import_decl_id).get_import().unwrap();
         assert_eq!(import_decl.path, vec!["A", "B", "C"]);
+
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
     fn parse_let_five_be_5() {
         let result = Parser::parse("let five = 5".to_string());
-        assert_eq!(result.decls.len(), 1);
+        let mut iter = result.decls();
 
-        let let_decl_id = result.decls[0];
+        let let_decl_id = iter.next().unwrap();
     }
 
     #[test]
     fn parse_let_paren_x_paren_be_2() {
         let result = Parser::parse("let (x) = 2".to_string());
-        assert_eq!(result.decls.len(), 1);
+        let mut iter = result.decls();
 
-        let let_decl_id = result.decls[0];
-        let let_decl = result.get_decl(let_decl_id).get_let().unwrap();
+        let let_decl_id = iter.next().unwrap();
+        let let_decl = result.get_decl(*let_decl_id).get_let().unwrap();
+
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
     fn parse_let_id_which_is_a_to_a() {
         let result = Parser::parse("let id : a -> a".to_string());
-        assert_eq!(result.decls.len(), 1);
+        let mut iter = result.decls();
 
-        let let_decl_id = result.decls[0];
-        let let_decl = result.get_decl(let_decl_id).get_let().unwrap();
+        let let_decl_id = iter.next().unwrap();
+        let let_decl = result.get_decl(*let_decl_id).get_let().unwrap();
+
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
     fn parse_let_id_x_be_x() {
         let result = Parser::parse("let id x = x".to_string());
-        assert_eq!(result.decls.len(), 1);
+        let mut iter = result.decls();
 
-        let let_decl_id = result.decls[0];
-        let let_decl = result.get_decl(let_decl_id).get_let().unwrap();
+        let let_decl_id = iter.next().unwrap();
+        let let_decl = result.get_decl(*let_decl_id).get_let().unwrap();
+
+        assert_eq!(iter.next(), None);
     }
 }

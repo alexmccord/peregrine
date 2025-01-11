@@ -12,7 +12,7 @@ impl<'ast> Dependencies<'ast> {
     pub fn get(program: &'ast ast::Program) -> Dependencies<'ast> {
         let mut vec = Vec::default();
 
-        for &decl in &program.decls {
+        for &decl in program.decls() {
             if let ast::Decl::Import(import) = program.get_decl(decl) {
                 vec.push(import)
             }

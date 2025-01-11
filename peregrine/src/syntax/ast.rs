@@ -1,21 +1,115 @@
+use std::slice::Iter;
+
 use super::cursor::Delimiter;
 
-pub type ExprId = id_arena::Id<Expr>;
-pub type DeclId = id_arena::Id<Decl>;
+pub enum AstNode<'ast> {
+    Expr(&'ast Expr),
+    Decl(&'ast Decl),
+}
+
+// Rust's "automatic Deref" can bite me.
+impl<'ast> From<&'ast Expr> for AstNode<'ast> {
+    fn from(value: &'ast Expr) -> Self {
+        AstNode::Expr(value)
+    }
+}
+
+// Rust's "automatic Deref" can bite me.
+impl<'ast> From<&'ast Decl> for AstNode<'ast> {
+    fn from(value: &'ast Decl) -> Self {
+        AstNode::Decl(value)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub enum AstId {
+    ExprId(ExprId),
+    DeclId(DeclId),
+}
+
+impl PartialEq<ExprId> for AstId {
+    fn eq(&self, other: &ExprId) -> bool {
+        match (self, other) {
+            (Self::ExprId(lhs), rhs) => lhs == rhs,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<DeclId> for AstId {
+    fn eq(&self, other: &DeclId) -> bool {
+        match (self, other) {
+            (Self::DeclId(lhs), rhs) => lhs == rhs,
+            _ => false,
+        }
+    }
+}
+
+// Peregrine is gonna have symmetric type classes. -_-
+impl PartialEq<AstId> for ExprId {
+    fn eq(&self, other: &AstId) -> bool {
+        other == self
+    }
+}
+
+// Peregrine is gonna have symmetric type classes. -_-
+impl PartialEq<AstId> for DeclId {
+    fn eq(&self, other: &AstId) -> bool {
+        other == self
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub struct ExprId(id_arena::Id<Expr>);
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub struct DeclId(id_arena::Id<Decl>);
+
+// Peregrine is gonna have transitive type classes. -_-
+// Conversion from `id_arena::Id<Expr>` to `ExprId`,
+// and then from `ExprId` to `AstId` should not require
+// two `.into()` calls.
+//
+// I can't be bothered.
+impl From<ExprId> for AstId {
+    fn from(value: ExprId) -> Self {
+        AstId::ExprId(value)
+    }
+}
+
+// Rust's "automatic Deref" can bite me.
+impl From<&ExprId> for AstId {
+    fn from(value: &ExprId) -> Self {
+        value.clone().into()
+    }
+}
+
+impl From<DeclId> for AstId {
+    fn from(value: DeclId) -> Self {
+        AstId::DeclId(value)
+    }
+}
+
+// Rust's "automatic Deref" can bite me.
+impl From<&DeclId> for AstId {
+    fn from(value: &DeclId) -> Self {
+        value.clone().into()
+    }
+}
 
 #[derive(Default)]
-pub(crate) struct AstAllocator {
+pub struct AstAllocator {
     exprs: id_arena::Arena<Expr>,
     decls: id_arena::Arena<Decl>,
 }
 
 impl AstAllocator {
-    pub(crate) fn alloc_expr(&mut self, expr: Expr) -> ExprId {
-        self.exprs.alloc(expr)
+    pub fn alloc_expr(&mut self, expr: Expr) -> ExprId {
+        ExprId(self.exprs.alloc(expr))
     }
 
-    pub(crate) fn alloc_decl(&mut self, decl: Decl) -> DeclId {
-        self.decls.alloc(decl)
+    pub fn alloc_decl(&mut self, decl: Decl) -> DeclId {
+        DeclId(self.decls.alloc(decl))
     }
 }
 
@@ -59,11 +153,8 @@ pub struct Data(pub ExprId);
 
 #[derive(Debug)]
 pub enum Let {
-    // let f : Nat -> Nat
     Decl(ExprId),
-    // let x = 5
     DeclExpr(ExprId, ExprId),
-    // let add2 x = x + 2 in add2 5
     DeclExprIn(ExprId, ExprId, ExprId),
 }
 
@@ -115,23 +206,31 @@ impl Decl {
 }
 
 pub struct Program {
-    arena: Box<AstAllocator>,
-    pub decls: Vec<DeclId>,
+    arena: AstAllocator,
+    decls: Vec<DeclId>,
 }
 
 impl Program {
     pub fn new(arena: AstAllocator, decls: Vec<DeclId>) -> Program {
-        Program {
-            arena: Box::new(arena),
-            decls,
+        Program { arena, decls }
+    }
+
+    pub fn get_ast(&self, id: AstId) -> AstNode {
+        match id {
+            AstId::ExprId(expr_id) => self.get_expr(expr_id).into(),
+            AstId::DeclId(decl_id) => self.get_decl(decl_id).into(),
         }
     }
 
-    pub fn get_expr(&self, id: ExprId) -> &Expr {
+    pub fn get_expr(&self, ExprId(id): ExprId) -> &Expr {
         &self.arena.exprs[id]
     }
 
-    pub fn get_decl(&self, id: DeclId) -> &Decl {
+    pub fn get_decl(&self, DeclId(id): DeclId) -> &Decl {
         &self.arena.decls[id]
+    }
+
+    pub fn decls(&self) -> Iter<DeclId> {
+        self.decls.iter()
     }
 }
