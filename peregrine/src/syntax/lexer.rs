@@ -9,6 +9,7 @@ pub enum Keyword {
     Let,
     Do,
     In,
+    Where,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -125,7 +126,7 @@ pub struct Lexer {
 }
 
 impl Lexer {
-    pub fn new(input: String) -> Lexer {
+    pub fn new(input: impl Into<String>) -> Lexer {
         Lexer {
             cursor: Cursor::new(input),
         }
@@ -192,6 +193,7 @@ impl Lexer {
             "let" => Some(Keyword::Let),
             "do" => Some(Keyword::Do),
             "in" => Some(Keyword::In),
+            "where" => Some(Keyword::Where),
             _ => None,
         }
     }
@@ -261,7 +263,7 @@ mod tests {
 
     #[test]
     fn scan_unknown() {
-        let mut lexer = Lexer::new("@@@".to_string());
+        let mut lexer = Lexer::new("@@@");
         assert_eq!(lexer.next(), Some(Token::unknown("@@@")));
     }
 
@@ -275,41 +277,42 @@ mod tests {
         kws.push(("let", Keyword::Let));
         kws.push(("do", Keyword::Do));
         kws.push(("in", Keyword::In));
+        kws.push(("where", Keyword::Where));
 
         for (str, kw) in kws {
-            let mut lexer = Lexer::new(str.to_string());
+            let mut lexer = Lexer::new(str);
             assert_eq!(lexer.next(), Some(Token::kw(kw)));
         }
     }
 
     #[test]
     fn scan_ident() {
-        let mut lexer = Lexer::new("abc".to_string());
+        let mut lexer = Lexer::new("abc");
         assert_eq!(lexer.next(), Some(Token::ident("abc")));
     }
 
     #[test]
     fn scan_ident_with_numerals() {
-        let mut lexer = Lexer::new("abc12".to_string());
+        let mut lexer = Lexer::new("abc12");
         assert_eq!(lexer.next(), Some(Token::ident("abc12")));
     }
 
     #[test]
     fn identifiers_dont_start_with_digits() {
-        let mut lexer = Lexer::new("1abc".to_string());
+        let mut lexer = Lexer::new("1abc");
         assert_eq!(lexer.next(), Some(Token::unknown("1")));
     }
 
     #[test]
     fn multiple_tokens() {
-        let mut lexer = Lexer::new("abc 123".to_string());
+        let mut lexer = Lexer::new("abc 123");
         assert_eq!(lexer.next(), Some(Token::ident("abc")));
         assert_eq!(lexer.next(), Some(Token::numeral("123")));
     }
 
     #[test]
     fn scan_operators() {
-        let mut lexer = Lexer::new(". .. .| ~ && ~()".to_string());
+        let mut lexer = Lexer::new(". .. .| ~ && ~()");
         assert_eq!(lexer.next(), Some(Token::operator(".")));
         assert_eq!(lexer.next(), Some(Token::operator("..")));
         assert_eq!(lexer.next(), Some(Token::operator(".|")));

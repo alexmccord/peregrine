@@ -10,10 +10,8 @@ Reminder that EBNF is incapable of expressing the actual language perfectly, but
 prog ::= {stmt};
 
 decl ::= `let`
-       | `trait`
-       | `impl`
        | `struct`
-       | `enum`
+       | `data`
        ;
 
 equation ::= expr `=` expr;

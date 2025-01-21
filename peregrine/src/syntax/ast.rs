@@ -121,21 +121,31 @@ pub enum AstError {
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-pub struct Symbol(pub String);
+pub struct Var(pub String);
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+pub struct Num(pub String);
 
 #[derive(Debug)]
 pub enum Expr {
-    Var(Symbol),
+    Var(Var),
     Lam(ExprId, ExprId),
     App(ExprId, ExprId),
     Ann(ExprId, ExprId),
-    Num(String),
+    Num(Num),
     Error(AstError, Option<ExprId>),
 }
 
 #[derive(Debug)]
 pub struct Module {
-    pub path: Vec<String>,
+    pub path: Option<Vec<String>>,
+    pub decls: Vec<DeclId>,
+}
+
+impl Module {
+    pub fn new(path: Option<Vec<String>>, decls: Vec<DeclId>) -> Module {
+        Module { path, decls }
+    }
 }
 
 #[derive(Debug)]
@@ -146,10 +156,20 @@ pub struct Import {
 // struct e where
 // struct e : T where
 #[derive(Debug)]
-pub struct Struct(pub ExprId);
+pub struct Struct(pub ExprId, pub StructFields);
 
 #[derive(Debug)]
-pub struct Data(pub ExprId);
+pub struct StructFields(pub Vec<ExprId>);
+
+#[derive(Debug)]
+pub struct Data(pub ExprId, pub DataCons);
+
+#[derive(Debug)]
+pub enum DataCons {
+    NoCons,
+    Equals(ExprId),
+    Where(Vec<ExprId>),
+}
 
 #[derive(Debug)]
 pub enum Let {
@@ -205,14 +225,14 @@ impl Decl {
     }
 }
 
-pub struct Program {
+pub struct Ast {
     arena: AstAllocator,
-    decls: Vec<DeclId>,
+    root: DeclId,
 }
 
-impl Program {
-    pub fn new(arena: AstAllocator, decls: Vec<DeclId>) -> Program {
-        Program { arena, decls }
+impl Ast {
+    pub fn new(arena: AstAllocator, root: DeclId) -> Ast {
+        Ast { arena, root }
     }
 
     pub fn get_ast(&self, id: AstId) -> AstNode {
@@ -230,7 +250,15 @@ impl Program {
         &self.arena.decls[id]
     }
 
+    pub fn get_root(&self) -> DeclId {
+        self.root
+    }
+
     pub fn decls(&self) -> Iter<DeclId> {
-        self.decls.iter()
+        let Some(module) = self.get_decl(self.root).get_module() else {
+            panic!("root is not a module?");
+        };
+
+        module.decls.iter()
     }
 }

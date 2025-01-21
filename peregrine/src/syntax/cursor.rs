@@ -92,8 +92,11 @@ pub struct Cursor {
 }
 
 impl Cursor {
-    pub fn new(input: String) -> Cursor {
-        Cursor { input, offset: 0 }
+    pub fn new(input: impl Into<String>) -> Cursor {
+        Cursor {
+            input: input.into(),
+            offset: 0,
+        }
     }
 
     pub fn offset(&self) -> usize {
@@ -187,7 +190,7 @@ mod tests {
     #[test]
     fn get_alpha_lowercase() {
         for c in 'a'..='z' {
-            let str = c.to_string();
+            let str = c;
             let cursor = Cursor::new(str);
             assert_eq!(cursor.get(), Grapheme::Alpha(Alpha(c)));
         }
@@ -196,7 +199,7 @@ mod tests {
     #[test]
     fn get_alpha_uppercase() {
         for c in 'A'..='Z' {
-            let str = c.to_string();
+            let str = c;
             let cursor = Cursor::new(str);
             assert_eq!(cursor.get(), Grapheme::Alpha(Alpha(c)));
         }
@@ -205,7 +208,7 @@ mod tests {
     #[test]
     fn get_digit() {
         for c in '0'..='9' {
-            let str = c.to_string();
+            let str = c;
             let cursor = Cursor::new(str);
             assert_eq!(cursor.get(), Grapheme::Digit(Digit(c)));
         }
@@ -213,13 +216,13 @@ mod tests {
 
     #[test]
     fn get_eof() {
-        let cursor = Cursor::new("".to_string());
+        let cursor = Cursor::new("");
         assert_eq!(cursor.get(), Grapheme::Eof);
     }
 
     #[test]
     fn get_all() {
-        let mut cursor = Cursor::new("abAB12".to_string());
+        let mut cursor = Cursor::new("abAB12");
         assert_eq!(cursor.next(), Some(Grapheme::Alpha(Alpha('a'))));
         assert_eq!(cursor.next(), Some(Grapheme::Alpha(Alpha('b'))));
         assert_eq!(cursor.next(), Some(Grapheme::Alpha(Alpha('A'))));
@@ -232,7 +235,7 @@ mod tests {
 
     #[test]
     fn get_newlines() {
-        let mut cursor = Cursor::new("\r\n\n".to_string());
+        let mut cursor = Cursor::new("\r\n\n");
         assert_eq!(cursor.next(), Some(Grapheme::Newline(Newline::CRLF)));
         assert_eq!(cursor.next(), Some(Grapheme::Newline(Newline::LF)));
         assert_eq!(cursor.next(), None);

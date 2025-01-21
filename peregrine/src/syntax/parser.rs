@@ -1,7 +1,7 @@
 use crate::syntax::ast;
 use crate::syntax::lexer::{Keyword, Lexer, Token, TokenKind};
 
-use super::ast::{AstAllocator, AstError, Program, Symbol};
+use super::ast::{Ast, AstAllocator, AstError, Module, Num, Var};
 use super::cursor::{Delimiter, Gate};
 
 pub enum Precedence {
@@ -17,7 +17,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    fn new(input: String) -> Parser {
+    fn new(input: impl Into<String>) -> Parser {
         Parser {
             lexer: Lexer::new(input),
             arena: AstAllocator::default(),
@@ -25,9 +25,10 @@ impl Parser {
         }
     }
 
-    pub fn parse(input: String) -> Program {
-        let parser = Parser::new(input);
-        parser.parse_program()
+    pub fn parse(input: impl Into<String>) -> Ast {
+        let mut parser = Parser::new(input);
+        let module = parser.parse_module();
+        Ast::new(parser.arena, module)
     }
 
     fn next(&mut self) -> Option<Token> {
@@ -104,27 +105,51 @@ impl Parser {
         self.arena.alloc_decl(decl)
     }
 
-    fn parse_program(mut self) -> ast::Program {
+    fn parse_module(&mut self) -> ast::DeclId {
+        if self.try_parse_kw(Keyword::Module).is_some() {
+            self.parse_module_tail()
+        } else {
+            let decls = self.parse_decls();
+            self.make_decl(ast::Decl::Module(ast::Module::new(None, decls)))
+        }
+    }
+
+    fn parse_module_tail(&mut self) -> ast::DeclId {
+        let (ok, path) = self.parse_path();
+
+        let decls = self.parse_decls();
+
+        let decl = self.make_decl(ast::Decl::Module(ast::Module::new(Some(path), decls)));
+
+        if ok {
+            decl
+        } else {
+            self.make_err_decl(AstError::MissingName, decl)
+        }
+    }
+
+    fn parse_decls(&mut self) -> Vec<ast::DeclId> {
         let mut decls = Vec::new();
 
-        while let Some(decl) = self.parse_top_level() {
+        while let Some(decl) = self.parse_decl() {
             decls.push(decl);
         }
 
-        ast::Program::new(self.arena, decls)
+        decls
     }
 
-    fn parse_top_level(&mut self) -> Option<ast::DeclId> {
+    fn parse_decl(&mut self) -> Option<ast::DeclId> {
         let tok = self.next()?;
         match tok.kind {
             TokenKind::Unknown(_) => todo!(),
-            TokenKind::Kw(Keyword::Module) => todo!(),
+            TokenKind::Kw(Keyword::Module) => Some(self.parse_module_tail()),
             TokenKind::Kw(Keyword::Import) => Some(self.parse_import_decl()),
             TokenKind::Kw(Keyword::Struct) => todo!(),
             TokenKind::Kw(Keyword::Data) => todo!(),
             TokenKind::Kw(Keyword::Let) => Some(self.parse_let_decl()),
             TokenKind::Kw(Keyword::Do) => todo!(),
             TokenKind::Kw(Keyword::In) => todo!(),
+            TokenKind::Kw(Keyword::Where) => todo!(),
             TokenKind::Ident(_) => todo!(),
             TokenKind::Numeral(_) => todo!(),
             TokenKind::Operator(_) => todo!(),
@@ -132,7 +157,8 @@ impl Parser {
         }
     }
 
-    fn parse_import_decl(&mut self) -> ast::DeclId {
+    fn parse_path(&mut self) -> (bool, Vec<String>) {
+        let mut ok = true;
         let mut path = Vec::new();
 
         loop {
@@ -144,12 +170,22 @@ impl Parser {
                     break;
                 }
             } else {
-                let decl = self.make_decl(ast::Decl::Import(ast::Import { path }));
-                return self.make_err_decl(AstError::MissingName, decl);
+                ok = false;
             }
         }
 
-        self.make_decl(ast::Decl::Import(ast::Import { path }))
+        (ok, path)
+    }
+
+    fn parse_import_decl(&mut self) -> ast::DeclId {
+        let (ok, path) = self.parse_path();
+        let decl = self.make_decl(ast::Decl::Import(ast::Import { path }));
+
+        if ok {
+            decl
+        } else {
+            self.make_err_decl(AstError::MissingName, decl)
+        }
     }
 
     fn parse_let_decl(&mut self) -> ast::DeclId {
@@ -218,14 +254,9 @@ impl Parser {
                     TokenKind::Kw(Keyword::Let) => todo!(),
                     TokenKind::Kw(Keyword::Do) => todo!(),
                     TokenKind::Kw(Keyword::In) => todo!(),
-                    TokenKind::Ident(ident) => {
-                        let sym = Symbol(ident.to_string());
-                        Some(self.make_expr(ast::Expr::Var(sym)))
-                    }
-                    TokenKind::Numeral(n) => {
-                        let str = n.to_string();
-                        Some(self.make_expr(ast::Expr::Num(str)))
-                    }
+                    TokenKind::Kw(Keyword::Where) => todo!(),
+                    TokenKind::Ident(ident) => Some(self.make_expr(ast::Expr::Var(Var(ident)))),
+                    TokenKind::Numeral(n) => Some(self.make_expr(ast::Expr::Num(Num(n)))),
                     TokenKind::Operator(_) => todo!(),
                     TokenKind::Delimiter(Delimiter::Paren(Gate::Opened)) => {
                         // Two missed opportunities to report errors.
@@ -264,13 +295,27 @@ mod tests {
 
     #[test]
     fn parse_nothing() {
-        let result = Parser::parse("".to_string());
+        let result = Parser::parse("");
         assert_eq!(result.decls().next(), None);
     }
 
     #[test]
+    fn parse_module_decl() {
+        let result = Parser::parse("module A.B.C");
+
+        let module = result.get_decl(result.get_root()).get_module().unwrap();
+
+        let mut path = Vec::new();
+        path.push("A".to_string());
+        path.push("B".to_string());
+        path.push("C".to_string());
+
+        assert_eq!(module.path, Some(path))
+    }
+
+    #[test]
     fn parse_import_decl() {
-        let result = Parser::parse("import A.B.C".to_string());
+        let result = Parser::parse("import A.B.C");
         let mut iter = result.decls();
 
         let import_decl_id = iter.next().unwrap();
@@ -282,7 +327,7 @@ mod tests {
 
     #[test]
     fn parse_let_five_be_5() {
-        let result = Parser::parse("let five = 5".to_string());
+        let result = Parser::parse("let five = 5");
         let mut iter = result.decls();
 
         let let_decl_id = iter.next().unwrap();
@@ -290,7 +335,7 @@ mod tests {
 
     #[test]
     fn parse_let_paren_x_paren_be_2() {
-        let result = Parser::parse("let (x) = 2".to_string());
+        let result = Parser::parse("let (x) = 2");
         let mut iter = result.decls();
 
         let let_decl_id = iter.next().unwrap();
@@ -301,7 +346,7 @@ mod tests {
 
     #[test]
     fn parse_let_id_which_is_a_to_a() {
-        let result = Parser::parse("let id : a -> a".to_string());
+        let result = Parser::parse("let id : a -> a");
         let mut iter = result.decls();
 
         let let_decl_id = iter.next().unwrap();
@@ -312,7 +357,7 @@ mod tests {
 
     #[test]
     fn parse_let_id_x_be_x() {
-        let result = Parser::parse("let id x = x".to_string());
+        let result = Parser::parse("let id x = x");
         let mut iter = result.decls();
 
         let let_decl_id = iter.next().unwrap();
