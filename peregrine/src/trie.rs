@@ -110,7 +110,7 @@ where
         let mut last_k = None;
 
         for k in &keys {
-            if let Some(k) = Option::take(&mut last_k) {
+            if let Some(k) = last_k.take() {
                 current = current.children.entry(k).or_default();
             }
 

@@ -142,7 +142,7 @@ mod tests {
     #[test]
     fn build_project() {
         let mut vfs = VirtualFileSystem::new();
-        vfs.mk_file(PathBuf::from("./foo.prg"), "hello!").unwrap();
+        vfs.mk_file(PathBuf::from("./foo.prg"), "").unwrap();
 
         let mut driver = BuildDriver::new(vfs);
         driver.submit_task(Task::BuildProject(PathBuf::from("./foo.prg")));
@@ -154,8 +154,7 @@ mod tests {
     #[test]
     fn build_project_at_dir_errors() {
         let mut vfs = VirtualFileSystem::new();
-        vfs.mk_file(PathBuf::from("./foo/bar.prg"), "hello!")
-            .unwrap();
+        vfs.mk_file(PathBuf::from("./foo/bar.prg"), "").unwrap();
 
         let mut driver = BuildDriver::new(vfs);
         driver.submit_task(Task::BuildProject(PathBuf::from("./foo")));
