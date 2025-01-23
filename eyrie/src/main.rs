@@ -1,11 +1,15 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, process};
 
 use clap;
 
-use peregrine::pipeline::{driver::BuildDriver, resolver::FileSystemIO, tasks::Task};
+use peregrine::pipeline::{
+    driver::{BuildDriver, BuildTask},
+    resolver::FileSystemIO,
+};
 
 #[derive(clap::Parser, Debug)]
 struct Build {
+    #[arg(short = 'C')]
     pub dir: Option<PathBuf>,
 }
 
@@ -23,9 +27,13 @@ fn main() {
 }
 
 fn build(build: Build) {
-    let prg = build.dir.unwrap();
+    let prg = build.dir.or(std::env::current_dir().ok()).unwrap();
 
     let mut driver = BuildDriver::new(FileSystemIO);
-    driver.submit_task(Task::BuildProject(prg));
-    driver.execute();
+    driver.submit_task(BuildTask::BuildProject(prg));
+
+    if let Err(e) = driver.execute() {
+        eprintln!("{e}");
+        process::exit(1);
+    }
 }

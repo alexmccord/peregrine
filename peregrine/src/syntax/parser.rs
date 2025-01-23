@@ -1,7 +1,7 @@
 use crate::syntax::ast;
 use crate::syntax::lexer::{Keyword, Lexer, Token, TokenKind};
 
-use super::ast::{Ast, AstAllocator, AstError, Module, Num, Var};
+use super::ast::{Ast, AstAllocator, AstError, Num, Var};
 use super::cursor::{Delimiter, Gate};
 
 pub enum Precedence {

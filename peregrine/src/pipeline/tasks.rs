@@ -1,18 +1,11 @@
 use std::collections::{HashMap, VecDeque};
-use std::path::PathBuf;
-
-#[derive(Debug)]
-pub enum Task {
-    BuildProject(PathBuf),
-    BuildModule(PathBuf),
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct TaskId(usize);
 
 #[derive(Debug)]
-pub(crate) struct SubmittedTask {
-    pub task: Task,
+pub(crate) struct Submitted<T> {
+    pub task: T,
     pub id: TaskId,
 }
 
@@ -49,14 +42,14 @@ pub(crate) enum Resolution {
 }
 
 #[derive(Debug)]
-pub(crate) struct TaskGraph {
+pub(crate) struct TaskGraph<T> {
     info: HashMap<TaskId, TaskInfo>,
-    queue: VecDeque<SubmittedTask>,
+    queue: VecDeque<Submitted<T>>,
     next_id: TaskId,
 }
 
-impl TaskGraph {
-    pub(crate) fn new() -> TaskGraph {
+impl<T> TaskGraph<T> {
+    pub(crate) fn new() -> TaskGraph<T> {
         TaskGraph {
             info: HashMap::default(),
             queue: VecDeque::default(),
@@ -64,11 +57,11 @@ impl TaskGraph {
         }
     }
 
-    pub(crate) fn submit(&mut self, task: Task) -> TaskId {
+    pub(crate) fn submit(&mut self, task: T) -> TaskId {
         let id = self.next_id;
         self.next_id.0 += 1;
 
-        let submitted = SubmittedTask { task, id };
+        let submitted = Submitted { task, id };
         self.info.insert(id, TaskInfo::new());
         self.queue.push_back(submitted);
 
@@ -83,7 +76,7 @@ impl TaskGraph {
         }
     }
 
-    pub(crate) fn pop(&mut self) -> Option<SubmittedTask> {
+    pub(crate) fn pop(&mut self) -> Option<Submitted<T>> {
         self.queue.pop_front()
     }
 }
