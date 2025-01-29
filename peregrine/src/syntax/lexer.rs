@@ -37,6 +37,38 @@ pub enum Keyword {
     Exists,
 }
 
+impl Keyword {
+    fn find(s: &str) -> Option<Keyword> {
+        match s {
+            "module" => Some(Keyword::Module),
+            "import" => Some(Keyword::Import),
+            "export" => Some(Keyword::Export),
+            "pub" => Some(Keyword::Pub),
+            "open" => Some(Keyword::Open),
+            "hiding" => Some(Keyword::Hiding),
+            "renaming" => Some(Keyword::Renaming),
+            "struct" => Some(Keyword::Struct),
+            "data" => Some(Keyword::Data),
+            "class" => Some(Keyword::Class),
+            "instance" => Some(Keyword::Instance),
+            "deriving" => Some(Keyword::Deriving),
+            "where" => Some(Keyword::Where),
+            "let" => Some(Keyword::Let),
+            "in" => Some(Keyword::In),
+            "do" => Some(Keyword::Do),
+            "if" => Some(Keyword::If),
+            "then" => Some(Keyword::Then),
+            "else" => Some(Keyword::Else),
+            "function" => Some(Keyword::Function),
+            "match" => Some(Keyword::Match),
+            "with" => Some(Keyword::With),
+            "forall" => Some(Keyword::Forall),
+            "exists" => Some(Keyword::Exists),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokenKind {
     Unknown(String),
@@ -179,10 +211,7 @@ impl Lexer {
             _ => ScanCommand::Terminate,
         });
 
-        match res {
-            Ok(str) => Token::unknown(str),
-            Err(tok) => tok,
-        }
+        res.map_or_else(|tok| tok, Token::unknown)
     }
 
     fn scan_identifier(&mut self) -> Token {
@@ -197,46 +226,10 @@ impl Lexer {
             Grapheme::Eof => ScanCommand::Terminate,
         });
 
-        match res {
-            Ok(str) => {
-                if let Some(kw) = Lexer::map_to_keyword(&str) {
-                    Token::kw(kw)
-                } else {
-                    Token::ident(str)
-                }
-            }
-            Err(tok) => tok,
-        }
-    }
-
-    fn map_to_keyword(ident: &str) -> Option<Keyword> {
-        match ident {
-            "module" => Some(Keyword::Module),
-            "import" => Some(Keyword::Import),
-            "export" => Some(Keyword::Export),
-            "pub" => Some(Keyword::Pub),
-            "open" => Some(Keyword::Open),
-            "hiding" => Some(Keyword::Hiding),
-            "renaming" => Some(Keyword::Renaming),
-            "struct" => Some(Keyword::Struct),
-            "data" => Some(Keyword::Data),
-            "class" => Some(Keyword::Class),
-            "instance" => Some(Keyword::Instance),
-            "deriving" => Some(Keyword::Deriving),
-            "where" => Some(Keyword::Where),
-            "let" => Some(Keyword::Let),
-            "in" => Some(Keyword::In),
-            "do" => Some(Keyword::Do),
-            "if" => Some(Keyword::If),
-            "then" => Some(Keyword::Then),
-            "else" => Some(Keyword::Else),
-            "function" => Some(Keyword::Function),
-            "match" => Some(Keyword::Match),
-            "with" => Some(Keyword::With),
-            "forall" => Some(Keyword::Forall),
-            "exists" => Some(Keyword::Exists),
-            _ => None,
-        }
+        res.map_or_else(
+            |tok| tok,
+            |str| Keyword::find(str).map_or(Token::ident(str), Token::kw),
+        )
     }
 
     fn scan_numeral(&mut self) -> Token {
@@ -251,10 +244,7 @@ impl Lexer {
             Grapheme::Eof => ScanCommand::Terminate,
         });
 
-        match res {
-            Ok(str) => Token::numeral(str),
-            Err(tok) => tok,
-        }
+        res.map_or_else(|tok| tok, Token::numeral)
     }
 
     fn scan_operator(&mut self) -> Token {
@@ -269,10 +259,7 @@ impl Lexer {
             Grapheme::Eof => ScanCommand::Terminate,
         });
 
-        match res {
-            Ok(str) => Token::operator(str),
-            Err(tok) => tok,
-        }
+        res.map_or_else(|tok| tok, Token::operator)
     }
 
     pub fn next(&mut self) -> Option<Token> {
