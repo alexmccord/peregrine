@@ -10,6 +10,12 @@ pub enum Keyword {
     Do,
     In,
     Where,
+    If,
+    Then,
+    Else,
+    Function,
+    Match,
+    With,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -194,6 +200,12 @@ impl Lexer {
             "do" => Some(Keyword::Do),
             "in" => Some(Keyword::In),
             "where" => Some(Keyword::Where),
+            "if" => Some(Keyword::If),
+            "then" => Some(Keyword::Then),
+            "else" => Some(Keyword::Else),
+            "function" => Some(Keyword::Function),
+            "match" => Some(Keyword::Match),
+            "with" => Some(Keyword::With),
             _ => None,
         }
     }
@@ -278,6 +290,12 @@ mod tests {
         kws.push(("do", Keyword::Do));
         kws.push(("in", Keyword::In));
         kws.push(("where", Keyword::Where));
+        kws.push(("if", Keyword::If));
+        kws.push(("then", Keyword::Then));
+        kws.push(("else", Keyword::Else));
+        kws.push(("function", Keyword::Function));
+        kws.push(("match", Keyword::Match));
+        kws.push(("with", Keyword::With));
 
         for (str, kw) in kws {
             let mut lexer = Lexer::new(str);
