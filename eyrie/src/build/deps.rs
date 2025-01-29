@@ -1,4 +1,4 @@
-use crate::syntax::ast::{Ast, Decl, DeclId, Import};
+use peregrine::syn::ast::{Ast, Decl, DeclId, Import};
 
 pub struct Dependencies<'ast> {
     pub imports: Vec<(DeclId, &'ast Import)>,
@@ -27,11 +27,11 @@ impl<'ast> Dependencies<'ast> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::syntax;
+    use peregrine::syn;
 
     #[test]
     fn empty_imports() {
-        let result = syntax::parse("");
+        let result = syn::parse("");
 
         let deps = Dependencies::get(&result);
         assert!(deps.imports.is_empty());
@@ -39,7 +39,7 @@ mod tests {
 
     #[test]
     fn import_something() {
-        let result = syntax::parse("import A");
+        let result = syn::parse("import A");
 
         let deps = Dependencies::get(&result);
         assert_eq!(deps.imports.len(), 1);
@@ -48,7 +48,7 @@ mod tests {
 
     #[test]
     fn import_a_bunch() {
-        let result = syntax::parse("import A\nimport A.B\nimport A.B.C");
+        let result = syn::parse("import A\nimport A.B\nimport A.B.C");
 
         let deps = Dependencies::get(&result);
         assert_eq!(deps.imports.len(), 3);

@@ -1,6 +1,6 @@
-use crate::syntax::ast::*;
-use crate::syntax::cursor::{Delimiter, Gate};
-use crate::syntax::lexer::{Keyword, Lexer, Token, TokenKind};
+use crate::syn::ast::*;
+use crate::syn::cursor::{Delimiter, Gate};
+use crate::syn::lexer::{Keyword, Lexer, Token, TokenKind};
 
 pub fn parse(input: impl Into<String>) -> Ast {
     let mut parser = Parser::new(input);

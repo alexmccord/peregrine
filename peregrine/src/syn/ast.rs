@@ -1,6 +1,6 @@
 use std::slice::Iter;
 
-use crate::syntax::cursor::Delimiter;
+use crate::syn::cursor::Delimiter;
 
 pub enum AstNode<'ast> {
     Expr(&'ast Expr),

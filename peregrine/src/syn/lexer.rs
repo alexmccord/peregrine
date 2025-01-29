@@ -1,4 +1,4 @@
-use crate::syntax::cursor::{Cursor, Delimiter, Gate, Grapheme};
+use crate::syn::cursor::{Cursor, Delimiter, Gate, Grapheme};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Keyword {

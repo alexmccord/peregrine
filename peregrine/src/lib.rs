@@ -1,6 +1,9 @@
-pub mod bs;
+mod compile;
+pub use compile::*;
+
 pub mod fs;
+pub mod sem;
+pub mod syn;
+
 mod pir;
-pub mod semantics;
-pub mod syntax;
 mod trie;

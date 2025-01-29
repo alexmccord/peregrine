@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use peregrine::fs::FileResolver;
 
+mod deps;
 pub mod manifest;
 
 #[derive(clap::Parser, Debug)]
