@@ -2,20 +2,39 @@ use crate::syntax::cursor::{Cursor, Delimiter, Gate, Grapheme};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Keyword {
+    // Module system
     Module,
     Import,
+    Export,
+    Pub,
+    Open,
+    Hiding,
+    Renaming,
+
+    // Product and sum types
     Struct,
     Data,
-    Let,
-    Do,
-    In,
+    Deriving,
+
+    // Typeclasses
+    Class,
+    Instance,
+
+    // Syntactic delimiters
     Where,
+
+    // Expressions
+    Let,
+    In,
+    Do,
     If,
     Then,
     Else,
     Function,
     Match,
     With,
+    Forall,
+    Exists,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -194,18 +213,28 @@ impl Lexer {
         match ident {
             "module" => Some(Keyword::Module),
             "import" => Some(Keyword::Import),
+            "export" => Some(Keyword::Export),
+            "pub" => Some(Keyword::Pub),
+            "open" => Some(Keyword::Open),
+            "hiding" => Some(Keyword::Hiding),
+            "renaming" => Some(Keyword::Renaming),
             "struct" => Some(Keyword::Struct),
             "data" => Some(Keyword::Data),
-            "let" => Some(Keyword::Let),
-            "do" => Some(Keyword::Do),
-            "in" => Some(Keyword::In),
+            "class" => Some(Keyword::Class),
+            "instance" => Some(Keyword::Instance),
+            "deriving" => Some(Keyword::Deriving),
             "where" => Some(Keyword::Where),
+            "let" => Some(Keyword::Let),
+            "in" => Some(Keyword::In),
+            "do" => Some(Keyword::Do),
             "if" => Some(Keyword::If),
             "then" => Some(Keyword::Then),
             "else" => Some(Keyword::Else),
             "function" => Some(Keyword::Function),
             "match" => Some(Keyword::Match),
             "with" => Some(Keyword::With),
+            "forall" => Some(Keyword::Forall),
+            "exists" => Some(Keyword::Exists),
             _ => None,
         }
     }
@@ -281,21 +310,32 @@ mod tests {
 
     #[test]
     fn scan_kw() {
-        let mut kws = Vec::new();
-        kws.push(("module", Keyword::Module));
-        kws.push(("import", Keyword::Import));
-        kws.push(("struct", Keyword::Struct));
-        kws.push(("data", Keyword::Data));
-        kws.push(("let", Keyword::Let));
-        kws.push(("do", Keyword::Do));
-        kws.push(("in", Keyword::In));
-        kws.push(("where", Keyword::Where));
-        kws.push(("if", Keyword::If));
-        kws.push(("then", Keyword::Then));
-        kws.push(("else", Keyword::Else));
-        kws.push(("function", Keyword::Function));
-        kws.push(("match", Keyword::Match));
-        kws.push(("with", Keyword::With));
+        let kws = vec![
+            ("module", Keyword::Module),
+            ("import", Keyword::Import),
+            ("export", Keyword::Export),
+            ("pub", Keyword::Pub),
+            ("open", Keyword::Open),
+            ("hiding", Keyword::Hiding),
+            ("renaming", Keyword::Renaming),
+            ("struct", Keyword::Struct),
+            ("data", Keyword::Data),
+            ("class", Keyword::Class),
+            ("instance", Keyword::Instance),
+            ("deriving", Keyword::Deriving),
+            ("where", Keyword::Where),
+            ("let", Keyword::Let),
+            ("in", Keyword::In),
+            ("do", Keyword::Do),
+            ("if", Keyword::If),
+            ("then", Keyword::Then),
+            ("else", Keyword::Else),
+            ("function", Keyword::Function),
+            ("match", Keyword::Match),
+            ("with", Keyword::With),
+            ("forall", Keyword::Forall),
+            ("exists", Keyword::Exists),
+        ];
 
         for (str, kw) in kws {
             let mut lexer = Lexer::new(str);
