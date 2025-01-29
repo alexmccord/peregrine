@@ -5,7 +5,7 @@ use clap::Parser;
 #[derive(clap::Parser)]
 pub struct Cli {
     pub input: PathBuf,
-    #[arg(long = "")]
+    #[arg(long = "output")]
     pub output: PathBuf,
 }
 
