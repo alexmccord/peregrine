@@ -1,8 +1,12 @@
-use crate::syntax::ast;
+use crate::syntax::ast::*;
+use crate::syntax::cursor::{Delimiter, Gate};
 use crate::syntax::lexer::{Keyword, Lexer, Token, TokenKind};
 
-use super::ast::{Ast, AstAllocator, AstError, Num, Var};
-use super::cursor::{Delimiter, Gate};
+pub fn parse(input: impl Into<String>) -> Ast {
+    let mut parser = Parser::new(input);
+    let module = parser.parse_module();
+    Ast::new(parser.arena, module)
+}
 
 pub enum Precedence {
     TyAnn, // e : T
@@ -23,12 +27,6 @@ impl Parser {
             arena: AstAllocator::default(),
             lookahead: None,
         }
-    }
-
-    pub fn parse(input: impl Into<String>) -> Ast {
-        let mut parser = Parser::new(input);
-        let module = parser.parse_module();
-        Ast::new(parser.arena, module)
     }
 
     fn next(&mut self) -> Option<Token> {
@@ -81,45 +79,45 @@ impl Parser {
         })
     }
 
-    fn make_err_expr(&mut self, err: AstError, expr: ast::ExprId) -> ast::ExprId {
-        self.arena.alloc_expr(ast::Expr::Error(err, Some(expr)))
+    fn make_err_expr(&mut self, err: AstError, expr: ExprId) -> ExprId {
+        self.arena.alloc_expr(Expr::Error(err, Some(expr)))
     }
 
-    fn report_expr_err(&mut self, err: AstError) -> ast::ExprId {
-        self.arena.alloc_expr(ast::Expr::Error(err, None))
+    fn report_expr_err(&mut self, err: AstError) -> ExprId {
+        self.arena.alloc_expr(Expr::Error(err, None))
     }
 
-    fn make_err_decl(&mut self, err: AstError, decl: ast::DeclId) -> ast::DeclId {
-        self.arena.alloc_decl(ast::Decl::Error(err, Some(decl)))
+    fn make_err_decl(&mut self, err: AstError, decl: DeclId) -> DeclId {
+        self.arena.alloc_decl(Decl::Error(err, Some(decl)))
     }
 
-    fn report_decl_error(&mut self, err: AstError) -> ast::DeclId {
-        self.arena.alloc_decl(ast::Decl::Error(err, None))
+    fn report_decl_error(&mut self, err: AstError) -> DeclId {
+        self.arena.alloc_decl(Decl::Error(err, None))
     }
 
-    fn make_expr(&mut self, expr: ast::Expr) -> ast::ExprId {
+    fn make_expr(&mut self, expr: Expr) -> ExprId {
         self.arena.alloc_expr(expr)
     }
 
-    fn make_decl(&mut self, decl: ast::Decl) -> ast::DeclId {
+    fn make_decl(&mut self, decl: Decl) -> DeclId {
         self.arena.alloc_decl(decl)
     }
 
-    fn parse_module(&mut self) -> ast::DeclId {
+    fn parse_module(&mut self) -> DeclId {
         if self.try_parse_kw(Keyword::Module).is_some() {
             self.parse_module_tail()
         } else {
             let decls = self.parse_decls();
-            self.make_decl(ast::Decl::Module(ast::Module::new(None, decls)))
+            self.make_decl(Decl::Module(Module::new(None, decls)))
         }
     }
 
-    fn parse_module_tail(&mut self) -> ast::DeclId {
+    fn parse_module_tail(&mut self) -> DeclId {
         let (ok, path) = self.parse_path();
 
         let decls = self.parse_decls();
 
-        let decl = self.make_decl(ast::Decl::Module(ast::Module::new(Some(path), decls)));
+        let decl = self.make_decl(Decl::Module(Module::new(Some(path), decls)));
 
         if ok {
             decl
@@ -128,7 +126,7 @@ impl Parser {
         }
     }
 
-    fn parse_decls(&mut self) -> Vec<ast::DeclId> {
+    fn parse_decls(&mut self) -> Vec<DeclId> {
         let mut decls = Vec::new();
 
         while let Some(decl) = self.parse_decl() {
@@ -138,7 +136,7 @@ impl Parser {
         decls
     }
 
-    fn parse_decl(&mut self) -> Option<ast::DeclId> {
+    fn parse_decl(&mut self) -> Option<DeclId> {
         let tok = self.next()?;
         match tok.kind {
             TokenKind::Unknown(_) => todo!(),
@@ -177,9 +175,9 @@ impl Parser {
         (ok, path)
     }
 
-    fn parse_import_decl(&mut self) -> ast::DeclId {
+    fn parse_import_decl(&mut self) -> DeclId {
         let (ok, path) = self.parse_path();
-        let decl = self.make_decl(ast::Decl::Import(ast::Import { path }));
+        let decl = self.make_decl(Decl::Import(Import { path }));
 
         if ok {
             decl
@@ -188,33 +186,33 @@ impl Parser {
         }
     }
 
-    fn parse_let_decl(&mut self) -> ast::DeclId {
+    fn parse_let_decl(&mut self) -> DeclId {
         let Some(f) = self.parse_expr(Precedence::TyAnn) else {
             return self.report_decl_error(AstError::MissingExpr);
         };
 
         if self.try_parse_operator('=').is_none() {
-            return self.make_decl(ast::Decl::Let(ast::Let::Decl(f)));
+            return self.make_decl(Decl::Let(Let::Decl(f)));
         }
 
         let Some(e) = self.parse_expr(Precedence::TyAnn) else {
-            let decl = self.make_decl(ast::Decl::Let(ast::Let::Decl(f)));
+            let decl = self.make_decl(Decl::Let(Let::Decl(f)));
             return self.make_err_decl(AstError::MissingExpr, decl);
         };
 
         if self.try_parse_kw(Keyword::In).is_none() {
-            return self.make_decl(ast::Decl::Let(ast::Let::DeclExpr(f, e)));
+            return self.make_decl(Decl::Let(Let::DeclExpr(f, e)));
         };
 
         let Some(r) = self.parse_expr(Precedence::TyAnn) else {
-            let decl = self.make_decl(ast::Decl::Let(ast::Let::DeclExpr(f, e)));
+            let decl = self.make_decl(Decl::Let(Let::DeclExpr(f, e)));
             return self.make_err_decl(AstError::MissingExpr, decl);
         };
 
-        self.make_decl(ast::Decl::Let(ast::Let::DeclExprIn(f, e, r)))
+        self.make_decl(Decl::Let(Let::DeclExprIn(f, e, r)))
     }
 
-    fn parse_expr(&mut self, pred: Precedence) -> Option<ast::ExprId> {
+    fn parse_expr(&mut self, pred: Precedence) -> Option<ExprId> {
         match pred {
             Precedence::TyAnn => {
                 let expr = self.parse_expr(Precedence::App);
@@ -228,15 +226,15 @@ impl Parser {
                 let ty = self.parse_expr(Precedence::App);
 
                 match (expr, ty) {
-                    (Some(expr), Some(ty)) => Some(self.make_expr(ast::Expr::Ann(expr, ty))),
+                    (Some(expr), Some(ty)) => Some(self.make_expr(Expr::Ann(expr, ty))),
                     (Some(expr), None) => {
                         let ty = self.report_expr_err(AstError::MissingExpr);
-                        let ann = self.make_expr(ast::Expr::Ann(expr, ty));
+                        let ann = self.make_expr(Expr::Ann(expr, ty));
                         Some(self.make_err_expr(AstError::MissingExpr, ann))
                     }
                     (None, Some(ty)) => {
                         let expr = self.report_expr_err(AstError::MissingExpr);
-                        let ann = self.make_expr(ast::Expr::Ann(expr, ty));
+                        let ann = self.make_expr(Expr::Ann(expr, ty));
                         Some(self.make_err_expr(AstError::MissingExpr, ann))
                     }
                     (None, None) => Some(self.report_expr_err(AstError::MissingExpr)),
@@ -255,8 +253,8 @@ impl Parser {
                     TokenKind::Kw(Keyword::Do) => todo!(),
                     TokenKind::Kw(Keyword::In) => todo!(),
                     TokenKind::Kw(Keyword::Where) => todo!(),
-                    TokenKind::Ident(ident) => Some(self.make_expr(ast::Expr::Var(Var(ident)))),
-                    TokenKind::Numeral(n) => Some(self.make_expr(ast::Expr::Num(Num(n)))),
+                    TokenKind::Ident(ident) => Some(self.make_expr(Expr::Var(Var(ident)))),
+                    TokenKind::Numeral(n) => Some(self.make_expr(Expr::Num(Num(n)))),
                     TokenKind::Operator(_) => todo!(),
                     TokenKind::Delimiter(Delimiter::Paren(Gate::Opened)) => {
                         // Two missed opportunities to report errors.
@@ -291,31 +289,26 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use super::Parser;
+    use super::*;
 
     #[test]
     fn parse_nothing() {
-        let result = Parser::parse("");
+        let result = parse("");
         assert_eq!(result.decls().next(), None);
     }
 
     #[test]
     fn parse_module_decl() {
-        let result = Parser::parse("module A.B.C");
+        let result = parse("module A.B.C");
 
         let module = result.get_decl(result.get_root()).get_module().unwrap();
-
-        let mut path = Vec::new();
-        path.push("A".to_string());
-        path.push("B".to_string());
-        path.push("C".to_string());
-
+        let path = vec!["A".to_string(), "B".to_string(), "C".to_string()];
         assert_eq!(module.path, Some(path))
     }
 
     #[test]
     fn parse_import_decl() {
-        let result = Parser::parse("import A.B.C");
+        let result = parse("import A.B.C");
         let mut iter = result.decls();
 
         let import_decl_id = iter.next().unwrap();
@@ -327,7 +320,7 @@ mod tests {
 
     #[test]
     fn parse_let_five_be_5() {
-        let result = Parser::parse("let five = 5");
+        let result = parse("let five = 5");
         let mut iter = result.decls();
 
         let let_decl_id = iter.next().unwrap();
@@ -335,7 +328,7 @@ mod tests {
 
     #[test]
     fn parse_let_paren_x_paren_be_2() {
-        let result = Parser::parse("let (x) = 2");
+        let result = parse("let (x) = 2");
         let mut iter = result.decls();
 
         let let_decl_id = iter.next().unwrap();
@@ -346,7 +339,7 @@ mod tests {
 
     #[test]
     fn parse_let_id_which_is_a_to_a() {
-        let result = Parser::parse("let id : a -> a");
+        let result = parse("let id : a -> a");
         let mut iter = result.decls();
 
         let let_decl_id = iter.next().unwrap();
@@ -357,7 +350,7 @@ mod tests {
 
     #[test]
     fn parse_let_id_x_be_x() {
-        let result = Parser::parse("let id x = x");
+        let result = parse("let id x = x");
         let mut iter = result.decls();
 
         let let_decl_id = iter.next().unwrap();

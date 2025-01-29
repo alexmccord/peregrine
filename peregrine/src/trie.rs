@@ -1,19 +1,43 @@
-use std::{borrow::Borrow, collections::HashMap, hash::Hash, marker::PhantomData};
+use std::{
+    borrow::Borrow,
+    collections::{HashMap, VecDeque},
+    hash::Hash,
+    marker::PhantomData,
+};
 
 #[derive(Debug, Clone)]
-pub struct TrieMap<K: ?Sized, A, V> {
+pub struct TrieMap<K, A, V> {
     map: HashMap<A, V>,
     children: HashMap<A, TrieMap<K, A, V>>,
     _marker: PhantomData<K>,
 }
 
-impl<K: ?Sized, A, V> TrieMap<K, A, V> {
+impl<K, A, V> TrieMap<K, A, V> {
     pub fn new() -> TrieMap<K, A, V> {
         TrieMap::default()
     }
+
+    /// Counts how many keys are bound to a value.
+    pub fn len(&self) -> usize {
+        // Extremely inefficient since we don't memoize. /shrug. Computers are fast enough.
+        let mut sum = 0;
+
+        let mut queue = VecDeque::new();
+        queue.push_front(self);
+
+        while let Some(node) = queue.pop_back() {
+            sum += node.map.len();
+
+            for (_, descendant) in &node.children {
+                queue.push_front(&descendant);
+            }
+        }
+
+        sum
+    }
 }
 
-impl<K: ?Sized, A, V> TrieMap<K, A, V>
+impl<K, A, V> TrieMap<K, A, V>
 where
     A: Eq + Hash,
 {
@@ -126,7 +150,7 @@ where
     }
 }
 
-impl<K: ?Sized, A, V> Default for TrieMap<K, A, V> {
+impl<K, A, V> Default for TrieMap<K, A, V> {
     fn default() -> Self {
         Self {
             map: Default::default(),
@@ -253,5 +277,18 @@ mod tests {
         let a_trie = &trie.children[&"a"];
         assert_eq!(a_trie.map.len(), 0);
         assert_eq!(a_trie.children.len(), 2);
+    }
+
+    #[test]
+    fn len_of_trie() {
+        let map: HashMap<Vec<&str>, i32> = HashMap::from_iter(vec![
+            (vec!["a", "b", "c"], 0),
+            (vec!["a", "b", "d"], 1),
+            (vec!["a", "x", "y"], 2),
+        ]);
+
+        let trie = TrieMap::from_iter(map);
+
+        assert_eq!(trie.len(), 3);
     }
 }

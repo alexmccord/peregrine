@@ -26,12 +26,12 @@ impl<'ast> Dependencies<'ast> {
 
 #[cfg(test)]
 mod tests {
-    use super::Dependencies;
-    use crate::syntax::parser::Parser;
+    use super::*;
+    use crate::syntax;
 
     #[test]
     fn empty_imports() {
-        let result = Parser::parse("");
+        let result = syntax::parse("");
 
         let deps = Dependencies::get(&result);
         assert!(deps.imports.is_empty());
@@ -39,7 +39,7 @@ mod tests {
 
     #[test]
     fn import_something() {
-        let result = Parser::parse("import A");
+        let result = syntax::parse("import A");
 
         let deps = Dependencies::get(&result);
         assert_eq!(deps.imports.len(), 1);
@@ -48,7 +48,7 @@ mod tests {
 
     #[test]
     fn import_a_bunch() {
-        let result = Parser::parse("import A\nimport A.B\nimport A.B.C");
+        let result = syntax::parse("import A\nimport A.B\nimport A.B.C");
 
         let deps = Dependencies::get(&result);
         assert_eq!(deps.imports.len(), 3);

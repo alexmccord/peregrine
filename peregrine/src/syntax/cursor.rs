@@ -185,7 +185,7 @@ impl Iterator for Cursor {
 
 #[cfg(test)]
 mod tests {
-    use super::{Alpha, Cursor, Digit, Grapheme, Newline};
+    use super::*;
 
     #[test]
     fn get_alpha_lowercase() {

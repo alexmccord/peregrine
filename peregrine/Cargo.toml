@@ -4,6 +4,4 @@ edition = "2021"
 
 [dependencies]
 id-arena = "2.2.1"
-serde = { version = "1.0.217", features = ["serde_derive"] }
 thiserror = "2.0.11"
-toml = "0.8.19"

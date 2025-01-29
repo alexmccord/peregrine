@@ -259,7 +259,7 @@ impl Lexer {
 
 #[cfg(test)]
 mod tests {
-    use super::{Delimiter, Gate, Keyword, Lexer, Token};
+    use super::*;
 
     #[test]
     fn scan_unknown() {

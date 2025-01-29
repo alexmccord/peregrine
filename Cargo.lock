@@ -109,6 +109,9 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "peregrine",
+ "serde",
+ "thiserror",
+ "toml",
 ]
 
 [[package]]
@@ -156,9 +159,15 @@ name = "peregrine"
 version = "0.0.0"
 dependencies = [
  "id-arena",
- "serde",
  "thiserror",
- "toml",
+]
+
+[[package]]
+name = "prgc"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "peregrine",
 ]
 
 [[package]]
