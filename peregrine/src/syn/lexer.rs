@@ -357,10 +357,9 @@ impl Lexer {
 
         res.map_or_else(
             |tok| tok,
-            |str| {
-                Keyword::find(&str).map_or(Token::ident(self.ids.next(), str, pos), |kw| {
-                    Token::kw(self.ids.next(), kw, pos)
-                })
+            |str| match Keyword::find(&str) {
+                Some(kw) => Token::kw(self.ids.next(), kw, pos),
+                None => Token::ident(self.ids.next(), str, pos),
             },
         )
     }
