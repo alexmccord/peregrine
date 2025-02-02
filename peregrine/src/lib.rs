@@ -1,9 +1,8 @@
-mod compile;
-pub use compile::*;
-
-pub mod fs;
-pub mod sem;
-pub mod syn;
-
-mod pir;
+mod sem;
 mod trie;
+
+pub mod ast;
+pub mod frontend;
+pub mod fs;
+pub mod idx;
+pub mod syn;

@@ -2,6 +2,12 @@ use std::{io::Read, path::Path};
 
 use thiserror::Error;
 
+mod io;
+mod virt;
+
+pub use io::FileSystemIO;
+pub use virt::{VirtualFile, VirtualFileSystem};
+
 #[derive(Error, Debug)]
 pub enum FileResolverError {
     #[error(transparent)]

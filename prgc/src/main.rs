@@ -3,8 +3,8 @@ use std::process;
 
 use clap::Parser;
 
-use peregrine;
-use peregrine::{fs::FileSystemIO, CompileOptions};
+use peregrine::frontend;
+use peregrine::fs;
 
 #[derive(clap::Parser)]
 pub struct Cli {
@@ -16,12 +16,12 @@ pub struct Cli {
 fn main() {
     let cli = Cli::parse();
 
-    let options = CompileOptions {
+    let options = frontend::CompileOptions {
         input: cli.input,
         output: cli.output,
     };
 
-    match peregrine::compile(options, FileSystemIO) {
+    match frontend::compile(options, fs::FileSystemIO) {
         Ok(()) => (),
         Err(e) => {
             eprintln!("{e}");

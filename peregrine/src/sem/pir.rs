@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::idx;
+
 // Yes.
 //
 // In the very first line of writing the type system, you can
@@ -50,27 +52,8 @@ impl Context {
     }
 }
 
-type TermId = id_arena::Id<Term>;
-
-pub struct TermArena {
-    arena: id_arena::Arena<Term>,
-}
-
-impl TermArena {
-    pub fn new() -> TermArena {
-        TermArena {
-            arena: id_arena::Arena::default(),
-        }
-    }
-
-    pub fn alloc(&mut self, term: Term) -> TermId {
-        self.arena.alloc(term)
-    }
-
-    pub fn get(&self, id: TermId) -> &Term {
-        &self.arena[id]
-    }
-}
+pub type TermId = idx::Id<Term>;
+pub type TermArena = idx::Generation<Term>;
 
 #[derive(Debug)]
 pub struct Binding(Var, TermId);
@@ -78,8 +61,27 @@ pub struct Binding(Var, TermId);
 #[derive(Debug)]
 pub struct Sort(Universe);
 
+pub struct Term {
+    id: TermId,
+    kind: TermKind,
+}
+
+impl Term {
+    fn new(id: TermId, kind: TermKind) -> Term {
+        Term { id, kind }
+    }
+
+    pub fn id(&self) -> TermId {
+        self.id
+    }
+
+    pub fn kind(&self) -> &TermKind {
+        &self.kind
+    }
+}
+
 #[derive(Debug)]
-pub enum Term {
+pub enum TermKind {
     // x
     Var(Var),
     // s
@@ -115,25 +117,25 @@ pub enum TypingError {
 }
 
 pub fn check(ctx: &Context, term: &Term) -> Result<(), TypingError> {
-    match term {
-        Term::Var(var) => {
+    match term.kind() {
+        TermKind::Var(var) => {
             let res = ctx.lookup(&var).ok_or(TypingError::UnknownVar(*var))?;
             Ok(()) // TODO: Conv typing rule
         }
-        Term::Sort(sort) => todo!(),
-        Term::Lam(binding, cell) => todo!(),
-        Term::App(cell, cell1) => todo!(),
-        Term::Pi(level, sort, binding, cell) => todo!(),
-        Term::BottomElim(cell, cell1) => todo!(),
-        Term::Bottom => todo!(),
-        Term::Equiv(cell, cell1, cell2) => todo!(),
-        Term::Refl(cell) => todo!(),
-        Term::Transp(cell, cell1, cell2, cell3, cell4, cell5) => todo!(),
-        Term::Cast(cell, cell1, cell2, cell3) => todo!(),
-        Term::Pi1 => todo!(),
-        Term::Pi2 => todo!(),
-        Term::OmegaExt => todo!(),
-        Term::PiExt => todo!(),
+        TermKind::Sort(sort) => todo!(),
+        TermKind::Lam(binding, cell) => todo!(),
+        TermKind::App(cell, cell1) => todo!(),
+        TermKind::Pi(level, sort, binding, cell) => todo!(),
+        TermKind::BottomElim(cell, cell1) => todo!(),
+        TermKind::Bottom => todo!(),
+        TermKind::Equiv(cell, cell1, cell2) => todo!(),
+        TermKind::Refl(cell) => todo!(),
+        TermKind::Transp(cell, cell1, cell2, cell3, cell4, cell5) => todo!(),
+        TermKind::Cast(cell, cell1, cell2, cell3) => todo!(),
+        TermKind::Pi1 => todo!(),
+        TermKind::Pi2 => todo!(),
+        TermKind::OmegaExt => todo!(),
+        TermKind::PiExt => todo!(),
     }
 }
 
@@ -146,14 +148,15 @@ mod tests {
         let mut arena = TermArena::new();
         let mut ctx = Context::new();
 
-        let a_ty = arena.alloc(Term::Sort(Sort(Universe::Uni(Level(0)))));
+        let a = Sort(Universe::Uni(Level(0)));
+        let a_term = Term::new(arena.next(), TermKind::Sort(a));
 
         let x = Var(0);
-        let x_term = arena.alloc(Term::Var(x));
+        let x_term = Term::new(arena.next(), TermKind::Var(x));
 
-        ctx.insert(x, a_ty);
+        ctx.insert(x, a_term.id());
 
-        let res = check(&ctx, arena.get(x_term));
+        let res = check(&ctx, &x_term);
         assert_eq!(res, Ok(()));
     }
 
@@ -163,9 +166,9 @@ mod tests {
         let ctx = Context::new();
 
         let x = Var(0);
-        let x_term = arena.alloc(Term::Var(x));
+        let x_term = Term::new(arena.next(), TermKind::Var(x));
 
-        let res = check(&ctx, arena.get(x_term));
+        let res = check(&ctx, &x_term);
         assert_eq!(res, Err(TypingError::UnknownVar(x)));
     }
 }

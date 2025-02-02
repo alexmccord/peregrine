@@ -18,10 +18,12 @@ pub enum Delimiter {
     Paren(Gate),
     Brace(Gate),
     Bracket(Gate),
+    Semicolon,
+    Comma,
 }
 
 impl Delimiter {
-    pub fn as_byte(&self) -> u8 {
+    pub(crate) fn as_byte(&self) -> u8 {
         match self {
             Delimiter::Paren(Gate::Opened) => b'(',
             Delimiter::Paren(Gate::Closed) => b')',
@@ -29,14 +31,16 @@ impl Delimiter {
             Delimiter::Brace(Gate::Closed) => b'}',
             Delimiter::Bracket(Gate::Opened) => b'[',
             Delimiter::Bracket(Gate::Closed) => b']',
+            Delimiter::Semicolon => b';',
+            Delimiter::Comma => b',',
         }
     }
 
-    pub fn as_char(&self) -> char {
+    pub fn to_char(&self) -> char {
         self.as_byte().into()
     }
 
-    pub fn from_byte(c: u8) -> Option<Delimiter> {
+    pub(crate) fn from_byte(c: u8) -> Option<Delimiter> {
         match c {
             b'(' => Some(Delimiter::Paren(Gate::Opened)),
             b')' => Some(Delimiter::Paren(Gate::Closed)),
@@ -44,7 +48,19 @@ impl Delimiter {
             b'}' => Some(Delimiter::Brace(Gate::Closed)),
             b'[' => Some(Delimiter::Bracket(Gate::Opened)),
             b']' => Some(Delimiter::Bracket(Gate::Closed)),
+            b';' => Some(Delimiter::Semicolon),
+            b',' => Some(Delimiter::Comma),
             _ => None,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            Delimiter::Paren(..) => 1,
+            Delimiter::Brace(..) => 1,
+            Delimiter::Bracket(..) => 1,
+            Delimiter::Semicolon => 1,
+            Delimiter::Comma => 1,
         }
     }
 }
@@ -71,7 +87,7 @@ pub enum Grapheme {
 }
 
 impl Grapheme {
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         match self {
             Grapheme::Alpha(_) => 1,
             Grapheme::Digit(_) => 1,
@@ -155,8 +171,6 @@ impl Cursor {
             || c == b'\\'
             || c == b'='
             || c == b':'
-            || c == b';'
-            || c == b','
             || c == b'!'
             || c == b'?'
             || c == b'.'

@@ -1,8 +1,6 @@
-use std::{
-    ffi::OsString,
-    io::{self, Cursor, Error, ErrorKind, Read},
-    path::{Path, PathBuf},
-};
+use std::ffi::OsString;
+use std::io::{Cursor, Error, ErrorKind, Read};
+use std::path::{Path, PathBuf};
 
 use crate::fs::{FileResolver, FileResolverError, Result};
 use crate::trie::TrieMap;
@@ -11,7 +9,7 @@ use crate::trie::TrieMap;
 pub struct VirtualFile(Cursor<String>);
 
 impl Read for VirtualFile {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.0.read(buf)
     }
 }
@@ -26,7 +24,7 @@ impl VirtualFileSystem {
         VirtualFileSystem { fs: TrieMap::new() }
     }
 
-    pub fn write(&mut self, path: PathBuf, content: impl Into<String>) -> io::Result<()> {
+    pub fn write(&mut self, path: PathBuf, content: impl Into<String>) -> std::io::Result<()> {
         if self.fs.contains_prefix_key(&path) {
             return Err(Error::from(ErrorKind::IsADirectory));
         }
