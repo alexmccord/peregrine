@@ -9,6 +9,150 @@ pub struct Decl {
     kind: DeclKind,
 }
 
+#[derive(Debug)]
+pub enum DeclKind {
+    // module Foo
+    Module(Module),
+    // import Foo.Bar
+    Import(Import),
+    // export <decl>
+    Export(Export),
+    // pub <decl>
+    Public(Public),
+    // open <decl>
+    Open(Open),
+    // struct Foo where
+    //   a : A
+    //   b : B
+    Struct(Struct),
+    // data Vec n a where
+    //   []   : Vec 0 a
+    //   (::) : a -> Vec n a -> Vec (n + 1) a
+    Data(Data),
+    // class Functor f where
+    //   let map : (a -> b) -> f a -> f b
+    Class(Class),
+    // instance Functor Maybe where
+    //   let map f = function
+    //     | Just x  -> Just (f x)
+    //     | Nothing -> Nothing
+    Instance(Instance),
+    // let e : T
+    // let e = x
+    Let(Let),
+    // In REPL mode only:
+    Expr(Expr),
+    Error(Option<DeclId>),
+}
+
+#[derive(Debug)]
+pub struct Module {
+    path: Option<Vec<String>>,
+    decls: Vec<Decl>,
+}
+
+#[derive(Debug)]
+pub struct Import {
+    path: Vec<String>,
+}
+
+#[derive(Debug)]
+pub struct Export(pub(crate) Box<Decl>); // TODO: export (..)
+
+#[derive(Debug)]
+pub struct Public(pub(crate) Box<Decl>);
+
+#[derive(Debug)]
+pub struct Open(pub(crate) Box<Decl>);
+
+#[derive(Debug)]
+pub struct Struct(pub(crate) Expr, pub(crate) Vec<Expr>);
+
+#[derive(Debug)]
+pub struct Data(
+    pub(crate) Expr,
+    pub(crate) DataCons,
+    pub(crate) Option<Deriving>,
+);
+
+#[derive(Debug)]
+pub enum DataCons {
+    NoCons,
+    Equals(Expr),
+    Where(Vec<Expr>),
+}
+
+#[derive(Debug)]
+pub struct Deriving(pub Expr);
+
+#[derive(Debug)]
+pub struct Class(pub(crate) Expr, pub(crate) Vec<Expr>);
+
+#[derive(Debug)]
+pub struct Instance(pub(crate) Expr, pub(crate) Vec<Expr>);
+
+// TODO: Rework top-level `let`.
+//
+// Originally, I was thinking to have OCaml style `let` but ran into some annoyances
+// where `=` is ambiguous in some cases such as:
+//
+// let plus_comm : (x : Nat) -> (y : Nat) -> x + y = y + x = Refl
+//
+// The problem there is, how do you determine if `Refl` is:
+// 1. the result of `plus_comm` where applying `plus_comm` gives the proof `Refl`?
+// 2. a transitive equality, similar to `g . f = id = f . g`?
+//
+// So I decided to go with the Haskell syntax, after all:
+//
+// plus_comm : (x : Nat) -> (y : Nat) -> x + y = y + x
+// plus_comm = Refl
+//
+// Am I saddened by it? A bit, yes. But also, not really. I've realized that the
+// `let` spam would get annoying fast in a functional programming language, so...
+// it's a net win, I guess. Consider the alternatives.
+//
+// 1) Keep the `let` but split it across lines.
+//    let plus_comm : (x : Nat) -> (y : Nat) -> x + y = y + x
+//    let plus_comm = Refl
+//
+// 2) Keep the `let` and use layout rule:
+//    let plus_comm : (x : Nat) -> (y : Nat) -> x + y = y + x
+//        plus_comm = Refl
+//
+// 3) Overengineer it:
+//    pub let new : [Char] -> String where
+//      new []      = ""
+//      new (c::cs) = "{c}{new cs}"
+//
+// Neither is great and feels like the `let` is superfluous so I'm just going to
+// drop the `let` keyword. It does have implications for the module system in nonobvious
+// ways, so I'll take the time to reconsider things carefully. I was okay with this:
+//
+// pub let new : [Char] -> String =
+//   function
+//   | []      -> ""
+//   | (c::cs) -> "{c}{new cs}"
+//
+// But not this where the function name and the equations for them are out of alignment:
+//
+// pub new : [Char] -> String
+// new []      = ""
+// new (c::cs) = "{c}{new cs}"
+//
+// Even if you had `pub` on a line of its own.
+//
+// pub
+// new : [Char] -> String
+// new []      = ""
+// new (c::cs) = "{c}{new cs}"
+//
+// So, need to give the module system more thinking in the face of our new reality.
+#[derive(Debug)]
+pub enum Let {
+    Decl(Expr),
+    DeclExpr(Expr, Expr),
+}
+
 impl Decl {
     pub fn new(id: DeclId, kind: DeclKind) -> Decl {
         Decl { id, kind }
@@ -107,300 +251,6 @@ impl Decl {
     }
 }
 
-#[derive(Debug)]
-pub enum DeclKind {
-    // module Foo
-    Module(Module),
-    // import Foo.Bar
-    Import(Import),
-    // export <decl>
-    Export(Export),
-    // pub <decl>
-    Public(Public),
-    // open <decl>
-    Open(Open),
-    // struct Foo where
-    //   a : A
-    //   b : B
-    Struct(Struct),
-    // data Vec n a where
-    //   []   : Vec 0 a
-    //   (::) : a -> Vec n a -> Vec (n + 1) a
-    Data(Data),
-    // class Functor f where
-    //   let map : (a -> b) -> f a -> f b
-    Class(Class),
-    // instance Functor Maybe where
-    //   let map f = function
-    //     | Just x  -> Just (f x)
-    //     | Nothing -> Nothing
-    Instance(Instance),
-    // let e : T
-    // let e = x
-    Let(Let),
-    // In REPL mode only:
-    Expr(Expr),
-    Error(Option<DeclId>),
-}
-
-#[derive(Debug)]
-pub struct Module {
-    path: Option<Vec<String>>,
-    decls: Vec<Decl>,
-}
-
-impl Module {
-    pub fn new(path: Option<Vec<String>>, decls: Vec<Decl>) -> Module {
-        Module { path, decls }
-    }
-
-    pub fn path(&self) -> Option<&Vec<String>> {
-        self.path.as_ref()
-    }
-
-    pub fn decls(&self) -> &Vec<Decl> {
-        &self.decls
-    }
-}
-
-#[derive(Debug)]
-pub struct Import {
-    path: Vec<String>,
-}
-
-impl Import {
-    pub fn new(path: Vec<String>) -> Import {
-        Import { path }
-    }
-
-    pub fn path(&self) -> &Vec<String> {
-        &self.path
-    }
-}
-
-#[derive(Debug)]
-pub struct Export(pub(crate) Box<Decl>); // TODO: export (..)
-
-impl Export {
-    pub fn new(decl: Decl) -> Export {
-        Export(Box::new(decl))
-    }
-
-    pub fn decl(&self) -> &Decl {
-        &self.0
-    }
-}
-
-#[derive(Debug)]
-pub struct Public(pub(crate) Box<Decl>);
-
-impl Public {
-    pub fn new(decl: Decl) -> Public {
-        Public(Box::new(decl))
-    }
-
-    pub fn decl(&self) -> &Decl {
-        &self.0
-    }
-}
-
-#[derive(Debug)]
-pub struct Open(pub(crate) Box<Decl>);
-
-impl Open {
-    pub fn new(decl: Decl) -> Open {
-        Open(Box::new(decl))
-    }
-
-    pub fn decl(&self) -> &Decl {
-        &self.0
-    }
-}
-
-#[derive(Debug)]
-pub struct Struct(pub(crate) Expr, pub(crate) Vec<Expr>);
-
-impl Struct {
-    pub fn new(sig: Expr, fields: Vec<Expr>) -> Struct {
-        Struct(sig, fields)
-    }
-
-    pub fn sig(&self) -> &Expr {
-        &self.0
-    }
-
-    pub fn fields(&self) -> &Vec<Expr> {
-        &self.1
-    }
-}
-
-#[derive(Debug)]
-pub struct Data(
-    pub(crate) Expr,
-    pub(crate) DataCons,
-    pub(crate) Option<Deriving>,
-);
-
-impl Data {
-    pub fn new(sig: Expr, cons: DataCons, deriving: Option<Deriving>) -> Data {
-        Data(sig, cons, deriving)
-    }
-
-    pub fn empty(sig: Expr) -> Data {
-        Data(sig, DataCons::NoCons, None)
-    }
-
-    pub fn adt(sig: Expr, constructors: Expr, deriving: Option<Deriving>) -> Data {
-        Data(sig, DataCons::Equals(constructors), deriving)
-    }
-
-    pub fn gadt(sig: Expr, constructors: Vec<Expr>, deriving: Option<Deriving>) -> Data {
-        Data(sig, DataCons::Where(constructors), deriving)
-    }
-
-    pub fn sig(&self) -> &Expr {
-        &self.0
-    }
-
-    pub fn cons(&self) -> &DataCons {
-        &self.1
-    }
-
-    pub fn deriving(&self) -> Option<&Deriving> {
-        self.2.as_ref()
-    }
-}
-
-#[derive(Debug)]
-pub enum DataCons {
-    NoCons,
-    Equals(Expr),
-    Where(Vec<Expr>),
-}
-
-#[derive(Debug)]
-pub struct Deriving(pub Expr);
-
-#[derive(Debug)]
-pub struct Class(pub(crate) Expr, pub(crate) Vec<Expr>);
-
-impl Class {
-    pub fn new(sig: Expr, body: Vec<Expr>) -> Class {
-        Class(sig, body)
-    }
-
-    pub fn sig(&self) -> &Expr {
-        &self.0
-    }
-
-    pub fn body(&self) -> &Vec<Expr> {
-        &self.1
-    }
-}
-
-#[derive(Debug)]
-pub struct Instance(pub(crate) Expr, pub(crate) Vec<Expr>);
-
-impl Instance {
-    pub fn new(sig: Expr, body: Vec<Expr>) -> Instance {
-        Instance(sig, body)
-    }
-
-    pub fn sig(&self) -> &Expr {
-        &self.0
-    }
-
-    pub fn body(&self) -> &Vec<Expr> {
-        &self.1
-    }
-}
-
-// TODO: Rework top-level `let`.
-//
-// Originally, I was thinking to have OCaml style `let` but ran into some annoyances
-// where `=` is ambiguous in some cases such as:
-//
-// let plus_comm : (x : Nat) -> (y : Nat) -> x + y = y + x = Refl
-//
-// The problem there is, how do you determine if `Refl` is:
-// 1. the result of `plus_comm` where applying `plus_comm` gives the proof `Refl`?
-// 2. a transitive equality, similar to `g . f = id = f . g`?
-//
-// So I decided to go with the Haskell syntax, after all:
-//
-// plus_comm : (x : Nat) -> (y : Nat) -> x + y = y + x
-// plus_comm = Refl
-//
-// Am I saddened by it? A bit, yes. But also, not really. I've realized that the
-// `let` spam would get annoying fast in a functional programming language, so...
-// it's a net win, I guess. Consider the alternatives.
-//
-// 1) Keep the `let` but split it across lines.
-//    let plus_comm : (x : Nat) -> (y : Nat) -> x + y = y + x
-//    let plus_comm = Refl
-//
-// 2) Keep the `let` and use layout rule:
-//    let plus_comm : (x : Nat) -> (y : Nat) -> x + y = y + x
-//        plus_comm = Refl
-//
-// 3) Overengineer it:
-//    pub let new : [Char] -> String where
-//      new []      = ""
-//      new (c::cs) = "{c}{new cs}"
-//
-// Neither is great and feels like the `let` is superfluous so I'm just going to
-// drop the `let` keyword. It does have implications for the module system in nonobvious
-// ways, so I'll take the time to reconsider things carefully. I was okay with this:
-//
-// pub let new : [Char] -> String =
-//   function
-//   | []      -> ""
-//   | (c::cs) -> "{c}{new cs}"
-//
-// But not this where the function name and the equations for them are out of alignment:
-//
-// pub new : [Char] -> String
-// new []      = ""
-// new (c::cs) = "{c}{new cs}"
-//
-// Even if you had `pub` on a line of its own.
-//
-// pub
-// new : [Char] -> String
-// new []      = ""
-// new (c::cs) = "{c}{new cs}"
-//
-// So, need to give the module system more thinking in the face of our new reality.
-#[derive(Debug)]
-pub enum Let {
-    Decl(Expr),
-    DeclExpr(Expr, Expr),
-}
-
-impl Let {
-    pub fn the_expr(the: Expr) -> Let {
-        Let::Decl(the)
-    }
-
-    pub fn the_expr_be(the: Expr, be: Expr) -> Let {
-        Let::DeclExpr(the, be)
-    }
-
-    pub fn get_the_expr(&self) -> &Expr {
-        match self {
-            Let::Decl(the) => &the,
-            Let::DeclExpr(the, _) => &the,
-        }
-    }
-
-    pub fn get_be_expr(&self) -> Option<&Expr> {
-        match self {
-            Let::Decl(_) => None,
-            Let::DeclExpr(_, be) => Some(&be),
-        }
-    }
-}
-
 impl DeclKind {
     pub fn module(path: Option<Vec<String>>, decls: Vec<Decl>) -> DeclKind {
         DeclKind::Module(Module::new(path, decls))
@@ -459,5 +309,155 @@ impl DeclKind {
 
     pub fn expr(expr: Expr) -> DeclKind {
         DeclKind::Expr(expr)
+    }
+}
+
+impl Module {
+    pub fn new(path: Option<Vec<String>>, decls: Vec<Decl>) -> Module {
+        Module { path, decls }
+    }
+
+    pub fn path(&self) -> Option<&Vec<String>> {
+        self.path.as_ref()
+    }
+
+    pub fn decls(&self) -> &Vec<Decl> {
+        &self.decls
+    }
+}
+
+impl Import {
+    pub fn new(path: Vec<String>) -> Import {
+        Import { path }
+    }
+
+    pub fn path(&self) -> &Vec<String> {
+        &self.path
+    }
+}
+
+impl Export {
+    pub fn new(decl: Decl) -> Export {
+        Export(Box::new(decl))
+    }
+
+    pub fn decl(&self) -> &Decl {
+        &self.0
+    }
+}
+
+impl Public {
+    pub fn new(decl: Decl) -> Public {
+        Public(Box::new(decl))
+    }
+
+    pub fn decl(&self) -> &Decl {
+        &self.0
+    }
+}
+
+impl Open {
+    pub fn new(decl: Decl) -> Open {
+        Open(Box::new(decl))
+    }
+
+    pub fn decl(&self) -> &Decl {
+        &self.0
+    }
+}
+
+impl Struct {
+    pub fn new(sig: Expr, fields: Vec<Expr>) -> Struct {
+        Struct(sig, fields)
+    }
+
+    pub fn sig(&self) -> &Expr {
+        &self.0
+    }
+
+    pub fn fields(&self) -> &Vec<Expr> {
+        &self.1
+    }
+}
+
+impl Data {
+    pub fn new(sig: Expr, cons: DataCons, deriving: Option<Deriving>) -> Data {
+        Data(sig, cons, deriving)
+    }
+
+    pub fn empty(sig: Expr) -> Data {
+        Data(sig, DataCons::NoCons, None)
+    }
+
+    pub fn adt(sig: Expr, constructors: Expr, deriving: Option<Deriving>) -> Data {
+        Data(sig, DataCons::Equals(constructors), deriving)
+    }
+
+    pub fn gadt(sig: Expr, constructors: Vec<Expr>, deriving: Option<Deriving>) -> Data {
+        Data(sig, DataCons::Where(constructors), deriving)
+    }
+
+    pub fn sig(&self) -> &Expr {
+        &self.0
+    }
+
+    pub fn cons(&self) -> &DataCons {
+        &self.1
+    }
+
+    pub fn deriving(&self) -> Option<&Deriving> {
+        self.2.as_ref()
+    }
+}
+
+impl Class {
+    pub fn new(sig: Expr, body: Vec<Expr>) -> Class {
+        Class(sig, body)
+    }
+
+    pub fn sig(&self) -> &Expr {
+        &self.0
+    }
+
+    pub fn body(&self) -> &Vec<Expr> {
+        &self.1
+    }
+}
+
+impl Instance {
+    pub fn new(sig: Expr, body: Vec<Expr>) -> Instance {
+        Instance(sig, body)
+    }
+
+    pub fn sig(&self) -> &Expr {
+        &self.0
+    }
+
+    pub fn body(&self) -> &Vec<Expr> {
+        &self.1
+    }
+}
+
+impl Let {
+    pub fn the_expr(the: Expr) -> Let {
+        Let::Decl(the)
+    }
+
+    pub fn the_expr_be(the: Expr, be: Expr) -> Let {
+        Let::DeclExpr(the, be)
+    }
+
+    pub fn get_the_expr(&self) -> &Expr {
+        match self {
+            Let::Decl(the) => &the,
+            Let::DeclExpr(the, _) => &the,
+        }
+    }
+
+    pub fn get_be_expr(&self) -> Option<&Expr> {
+        match self {
+            Let::Decl(_) => None,
+            Let::DeclExpr(_, be) => Some(&be),
+        }
     }
 }

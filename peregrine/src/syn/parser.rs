@@ -419,19 +419,6 @@ impl Parser {
         }
     }
 
-    fn parse_assoc_expr(&mut self) -> Option<Expr> {
-        let tok = self.next()?;
-
-        match self.tokens[tok].kind() {
-            TokenKind::Unknown(_) => todo!(),
-            TokenKind::Kw(_) => todo!(),
-            TokenKind::Ident(_) => todo!(),
-            TokenKind::Numeral(_) => todo!(),
-            TokenKind::Operator(_) => todo!(),
-            TokenKind::Delimiter(_) => todo!(),
-        }
-    }
-
     fn parse_let_expr_tail(&mut self, tok: TokenId) -> Expr {
         let Some(f) = self.parse_expr(Precedence::TyAnn) else {
             return self.report_expr_error(SyntaxError::MissingExpr);
@@ -494,6 +481,19 @@ impl Parser {
         };
 
         self.make_err_expr(err, expr.id())
+    }
+
+    fn parse_assoc_expr(&mut self) -> Option<Expr> {
+        let tok = self.next()?;
+
+        match self.tokens[tok].kind() {
+            TokenKind::Unknown(_) => todo!(),
+            TokenKind::Kw(_) => todo!(),
+            TokenKind::Ident(_) => todo!(),
+            TokenKind::Numeral(_) => todo!(),
+            TokenKind::Operator(_) => todo!(),
+            TokenKind::Delimiter(_) => todo!(),
+        }
     }
 }
 

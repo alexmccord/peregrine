@@ -8,6 +8,95 @@ pub struct Expr {
     kind: ExprKind,
 }
 
+#[derive(Debug)]
+pub enum ExprKind {
+    // x
+    Var(Var),
+    // \x -> x * 2
+    Lam(Lam),
+    // f x
+    App(App),
+    // e : T
+    Ann(Ann),
+    // 5
+    Num(Num),
+    // ()
+    Unit,
+    // let e = x
+    // let e = x in e
+    Let(Let),
+    // let main = do
+    //   print "a"
+    //   print "b"
+    Do(Do),
+    // if cond then t else f
+    If(IfThenElse),
+    // let length = function
+    //   | []      -> 0
+    //   | (x::xs) -> 1 + length xs
+    Function(Function),
+    // let filter f = function
+    //   | []      -> []
+    //   | (x::xs) -> if f x then x::filter f xs else filter f xs
+    Match(Match),
+    // (e)
+    Assoc(Assoc),
+    // forall f a. a -> f a
+    Forall(Forall),
+    // exists a. f a -> g a
+    Exists(Exists),
+    Error(Option<ExprId>),
+}
+
+#[derive(Debug)]
+pub struct Var(pub String);
+
+#[derive(Debug)]
+pub struct Lam(pub Box<Expr>, pub Box<Expr>);
+
+#[derive(Debug)]
+pub struct App(pub Box<Expr>, pub Box<Expr>);
+
+#[derive(Debug)]
+pub struct Ann(pub Box<Expr>, pub Box<Expr>);
+
+#[derive(Debug)]
+pub struct Num(pub String);
+
+#[derive(Debug)]
+pub enum Let {
+    DeclExpr(Box<Expr>, Box<Expr>),
+    DeclExprIn(Box<Expr>, Box<Expr>, Box<Expr>),
+}
+
+#[derive(Debug)]
+pub struct Do(pub Vec<Stmt>);
+
+#[derive(Debug)]
+pub struct Stmt(pub Box<Expr>);
+
+#[derive(Debug)]
+pub struct IfThenElse {
+    antecedent: Box<Expr>,
+    consequent: Box<Expr>,
+    alternative: Box<Expr>,
+}
+
+#[derive(Debug)]
+pub struct Function(pub Box<Expr>);
+
+#[derive(Debug)]
+pub struct Match(pub Box<Expr>, pub Box<Expr>);
+
+#[derive(Debug)]
+pub struct Assoc(pub Box<Expr>);
+
+#[derive(Debug)]
+pub struct Forall(pub Box<Expr>, pub Box<Expr>);
+
+#[derive(Debug)]
+pub struct Exists(pub Box<Expr>, pub Box<Expr>);
+
 impl Expr {
     pub fn new(id: ExprId, kind: ExprKind) -> Expr {
         Expr { id, kind }
@@ -95,6 +184,13 @@ impl Expr {
         }
     }
 
+    pub fn as_assoc(&self) -> Option<&Assoc> {
+        match self.kind() {
+            ExprKind::Assoc(e) => Some(e),
+            _ => None,
+        }
+    }
+
     pub fn as_forall(&self) -> Option<&Forall> {
         match self.kind() {
             ExprKind::Forall(f) => Some(f),
@@ -114,241 +210,6 @@ impl Expr {
             ExprKind::Error(e) => Some(e.clone()),
             _ => None,
         }
-    }
-}
-
-#[derive(Debug)]
-pub enum ExprKind {
-    // x
-    Var(Var),
-    // \x -> x * 2
-    Lam(Lam),
-    // f x
-    App(App),
-    // e : T
-    Ann(Ann),
-    // 5
-    Num(Num),
-    // ()
-    Unit,
-    // let e = x
-    // let e = x in e
-    Let(Let),
-    // let main = do
-    //   print "a"
-    //   print "b"
-    Do(Do),
-    // if cond then t else f
-    If(IfThenElse),
-    // let length = function
-    //   | []      -> 0
-    //   | (x::xs) -> 1 + length xs
-    Function(Function),
-    // let filter f = function
-    //   | []      -> []
-    //   | (x::xs) -> if f x then x::filter f xs else filter f xs
-    Match(Match),
-    // forall f a. a -> f a
-    Forall(Forall),
-    // exists a. f a -> g a
-    Exists(Exists),
-    Error(Option<ExprId>),
-}
-
-#[derive(Debug)]
-pub struct Var(pub String);
-
-impl Var {
-    pub fn new(id: String) -> Var {
-        Var(id)
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-#[derive(Debug)]
-pub struct Lam(pub Box<Expr>, pub Box<Expr>);
-
-impl Lam {
-    pub fn new(p: Expr, e: Expr) -> Lam {
-        Lam(Box::new(p), Box::new(e))
-    }
-
-    pub fn param(&self) -> &Expr {
-        &self.0
-    }
-
-    pub fn expr(&self) -> &Expr {
-        &self.1
-    }
-}
-
-#[derive(Debug)]
-pub struct App(pub Box<Expr>, pub Box<Expr>);
-
-impl App {
-    pub fn new(f: Expr, a: Expr) -> App {
-        App(Box::new(f), Box::new(a))
-    }
-
-    pub fn function(&self) -> &Expr {
-        &self.0
-    }
-
-    pub fn argument(&self) -> &Expr {
-        &self.1
-    }
-}
-
-#[derive(Debug)]
-pub struct Ann(pub Box<Expr>, pub Box<Expr>);
-
-impl Ann {
-    pub fn new(e: Expr, t: Expr) -> Ann {
-        Ann(Box::new(e), Box::new(t))
-    }
-
-    pub fn expr(&self) -> &Expr {
-        &self.0
-    }
-
-    pub fn ty(&self) -> &Expr {
-        &self.1
-    }
-}
-
-#[derive(Debug)]
-pub struct Num(pub String);
-
-impl Num {
-    pub fn new(num: String) -> Num {
-        Num(num)
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-#[derive(Debug)]
-pub enum Let {
-    DeclExpr(Box<Expr>, Box<Expr>),
-    DeclExprIn(Box<Expr>, Box<Expr>, Box<Expr>),
-}
-
-impl Let {
-    pub fn the_expr_be(e1: Expr, e2: Expr) -> Let {
-        Let::DeclExpr(Box::new(e1), Box::new(e2))
-    }
-
-    pub fn the_expr_be_in(e1: Expr, e2: Expr, e3: Expr) -> Let {
-        Let::DeclExprIn(Box::new(e1), Box::new(e2), Box::new(e3))
-    }
-
-    pub fn get_the_expr(&self) -> &Expr {
-        match self {
-            Let::DeclExpr(the, _) => &the,
-            Let::DeclExprIn(the, _, _) => &the,
-        }
-    }
-
-    pub fn get_be_expr(&self) -> &Expr {
-        match self {
-            Let::DeclExpr(_, be) => &be,
-            Let::DeclExprIn(_, be, _) => &be,
-        }
-    }
-
-    pub fn get_in_expr(&self) -> Option<&Expr> {
-        match self {
-            Let::DeclExpr(_, _) => None,
-            Let::DeclExprIn(_, _, in_the) => Some(&in_the),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Do(pub Vec<Stmt>);
-
-impl Do {
-    pub fn new(stmts: Vec<Stmt>) -> Do {
-        Do(stmts)
-    }
-}
-
-#[derive(Debug)]
-pub struct Stmt(pub Box<Expr>);
-
-impl Stmt {
-    pub fn new(expr: Expr) -> Stmt {
-        Stmt(Box::new(expr))
-    }
-}
-
-#[derive(Debug)]
-pub struct IfThenElse {
-    antecedent: Box<Expr>,
-    consequent: Box<Expr>,
-    alternative: Box<Expr>,
-}
-
-impl IfThenElse {
-    pub fn new(antecedent: Expr, consequent: Expr, alternative: Expr) -> IfThenElse {
-        IfThenElse {
-            antecedent: Box::new(antecedent),
-            consequent: Box::new(consequent),
-            alternative: Box::new(alternative),
-        }
-    }
-
-    pub fn antecedent(&self) -> &Expr {
-        &self.antecedent
-    }
-
-    pub fn consequent(&self) -> &Expr {
-        &self.consequent
-    }
-
-    pub fn alternative(&self) -> &Expr {
-        &self.alternative
-    }
-}
-
-#[derive(Debug)]
-pub struct Function(pub Box<Expr>);
-
-impl Function {
-    pub fn new(alternatives: Expr) -> Function {
-        Function(Box::new(alternatives))
-    }
-}
-
-#[derive(Debug)]
-pub struct Match(pub Box<Expr>, pub Box<Expr>);
-
-impl Match {
-    pub fn new(antecedent: Expr, alternatives: Expr) -> Match {
-        Match(Box::new(antecedent), Box::new(alternatives))
-    }
-}
-
-#[derive(Debug)]
-pub struct Forall(pub Box<Expr>, pub Box<Expr>);
-
-impl Forall {
-    pub fn new(param: Expr, expr: Expr) -> Forall {
-        Forall(Box::new(param), Box::new(expr))
-    }
-}
-
-#[derive(Debug)]
-pub struct Exists(pub Box<Expr>, pub Box<Expr>);
-
-impl Exists {
-    pub fn new(param: Expr, expr: Expr) -> Exists {
-        Exists(Box::new(param), Box::new(expr))
     }
 }
 
@@ -407,5 +268,166 @@ impl ExprKind {
 
     pub fn exists(param: Expr, expr: Expr) -> ExprKind {
         ExprKind::Exists(Exists::new(param, expr))
+    }
+
+    pub fn assoc(expr: Expr) -> ExprKind {
+        ExprKind::Assoc(Assoc::new(expr))
+    }
+}
+
+impl Var {
+    pub fn new(id: String) -> Var {
+        Var(id)
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Lam {
+    pub fn new(p: Expr, e: Expr) -> Lam {
+        Lam(Box::new(p), Box::new(e))
+    }
+
+    pub fn param(&self) -> &Expr {
+        &self.0
+    }
+
+    pub fn expr(&self) -> &Expr {
+        &self.1
+    }
+}
+
+impl App {
+    pub fn new(f: Expr, a: Expr) -> App {
+        App(Box::new(f), Box::new(a))
+    }
+
+    pub fn function(&self) -> &Expr {
+        &self.0
+    }
+
+    pub fn argument(&self) -> &Expr {
+        &self.1
+    }
+}
+
+impl Ann {
+    pub fn new(e: Expr, t: Expr) -> Ann {
+        Ann(Box::new(e), Box::new(t))
+    }
+
+    pub fn expr(&self) -> &Expr {
+        &self.0
+    }
+
+    pub fn ty(&self) -> &Expr {
+        &self.1
+    }
+}
+
+impl Num {
+    pub fn new(num: String) -> Num {
+        Num(num)
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Let {
+    pub fn the_expr_be(e1: Expr, e2: Expr) -> Let {
+        Let::DeclExpr(Box::new(e1), Box::new(e2))
+    }
+
+    pub fn the_expr_be_in(e1: Expr, e2: Expr, e3: Expr) -> Let {
+        Let::DeclExprIn(Box::new(e1), Box::new(e2), Box::new(e3))
+    }
+
+    pub fn get_the_expr(&self) -> &Expr {
+        match self {
+            Let::DeclExpr(the, _) => &the,
+            Let::DeclExprIn(the, _, _) => &the,
+        }
+    }
+
+    pub fn get_be_expr(&self) -> &Expr {
+        match self {
+            Let::DeclExpr(_, be) => &be,
+            Let::DeclExprIn(_, be, _) => &be,
+        }
+    }
+
+    pub fn get_in_expr(&self) -> Option<&Expr> {
+        match self {
+            Let::DeclExpr(_, _) => None,
+            Let::DeclExprIn(_, _, in_the) => Some(&in_the),
+        }
+    }
+}
+
+impl Do {
+    pub fn new(stmts: Vec<Stmt>) -> Do {
+        Do(stmts)
+    }
+}
+
+impl Stmt {
+    pub fn new(expr: Expr) -> Stmt {
+        Stmt(Box::new(expr))
+    }
+}
+
+impl IfThenElse {
+    pub fn new(antecedent: Expr, consequent: Expr, alternative: Expr) -> IfThenElse {
+        IfThenElse {
+            antecedent: Box::new(antecedent),
+            consequent: Box::new(consequent),
+            alternative: Box::new(alternative),
+        }
+    }
+
+    pub fn antecedent(&self) -> &Expr {
+        &self.antecedent
+    }
+
+    pub fn consequent(&self) -> &Expr {
+        &self.consequent
+    }
+
+    pub fn alternative(&self) -> &Expr {
+        &self.alternative
+    }
+}
+
+impl Function {
+    pub fn new(alternatives: Expr) -> Function {
+        Function(Box::new(alternatives))
+    }
+}
+
+impl Match {
+    pub fn new(antecedent: Expr, alternatives: Expr) -> Match {
+        Match(Box::new(antecedent), Box::new(alternatives))
+    }
+}
+
+impl Assoc {
+    pub fn new(expr: Expr) -> Assoc {
+        Assoc(Box::new(expr))
+    }
+}
+
+impl Forall {
+    pub fn new(param: Expr, expr: Expr) -> Forall {
+        Forall(Box::new(param), Box::new(expr))
+    }
+}
+
+impl Exists {
+    pub fn new(param: Expr, expr: Expr) -> Exists {
+        Exists(Box::new(param), Box::new(expr))
     }
 }
