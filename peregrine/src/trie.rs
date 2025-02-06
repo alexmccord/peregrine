@@ -1,9 +1,7 @@
-use std::{
-    borrow::Borrow,
-    collections::{HashMap, VecDeque},
-    hash::Hash,
-    marker::PhantomData,
-};
+use std::borrow::Borrow;
+use std::collections::{HashMap, VecDeque};
+use std::hash::Hash;
+use std::marker::PhantomData;
 
 #[derive(Debug, Clone)]
 pub struct TrieMap<K, A, V> {
