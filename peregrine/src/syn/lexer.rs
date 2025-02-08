@@ -220,6 +220,13 @@ enum ScanCommand {
 
 use ScanCommand::{Append, Terminate};
 
+fn map_tok<F>(res: Result<String, TokenKind>, f: F) -> TokenKind
+where
+    F: FnOnce(String) -> TokenKind,
+{
+    res.map_or_else(|tok| tok, |str| f(str))
+}
+
 #[derive(Debug)]
 pub(crate) struct Lexer {
     cursor: Cursor,
@@ -238,13 +245,6 @@ impl Lexer {
 
     pub fn current_position(&self) -> Position {
         self.current_pos
-    }
-
-    fn push<F>(&mut self, res: Result<String, TokenKind>, f: F) -> TokenKind
-    where
-        F: FnOnce(String) -> TokenKind,
-    {
-        res.map_or_else(|tok| tok, |str| f(str))
     }
 
     fn scan(&mut self, f: impl Fn(Grapheme) -> ScanResult) -> Result<String, TokenKind> {
@@ -304,7 +304,7 @@ impl Lexer {
             _ => ScanResult::Err(Terminate),
         });
 
-        self.push(res, |str| TokenKind::Unknown(str))
+        map_tok(res, |str| TokenKind::Unknown(str))
     }
 
     fn scan_identifier(&mut self) -> TokenKind {
@@ -320,7 +320,7 @@ impl Lexer {
             Grapheme::Eof => ScanResult::Ok(Terminate),
         });
 
-        self.push(res, |str| match Keyword::find(&str) {
+        map_tok(res, |str| match Keyword::find(&str) {
             Some(kw) => TokenKind::Kw(kw),
             None => TokenKind::Ident(str),
         })
@@ -339,7 +339,7 @@ impl Lexer {
             Grapheme::Eof => ScanResult::Ok(Terminate),
         });
 
-        self.push(res, |str| TokenKind::Numeral(str))
+        map_tok(res, |str| TokenKind::Numeral(str))
     }
 
     fn scan_bytestring(&mut self, quot: Quotation) -> TokenKind {
@@ -370,7 +370,7 @@ impl Lexer {
 
         let end_pos = self.current_position();
 
-        self.push(res, |str| {
+        map_tok(res, |str| {
             TokenKind::ByteString(ByteString::from_quot(quot, str, end_pos))
         })
     }
@@ -388,7 +388,7 @@ impl Lexer {
             Grapheme::Eof => ScanResult::Ok(Terminate),
         });
 
-        self.push(res, |str| TokenKind::Operator(str))
+        map_tok(res, |str| TokenKind::Operator(str))
     }
 
     fn advance_cursor(&mut self) -> bool {
