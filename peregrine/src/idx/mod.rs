@@ -1,86 +1,46 @@
-use std::{fmt, hash, marker::PhantomData};
+use std::{fmt, hash};
 
 mod indexed_vec;
+mod macros;
+
+#[cfg(test)]
 mod tests;
 
+pub use crate::newindex;
 pub use indexed_vec::IndexedVec;
 
-pub struct Id<T> {
-    idx: usize,
-    marker: PhantomData<fn() -> T>,
-}
+pub trait Idx: fmt::Debug + fmt::Display + Copy + Eq + hash::Hash {
+    fn new(index: usize) -> Self;
+    fn index(self) -> usize;
 
-impl<T> Id<T> {
-    fn new(idx: usize) -> Id<T> {
-        Id {
-            idx,
-            marker: PhantomData,
-        }
+    fn increment_mut(&mut self, n: usize) {
+        *self = self.increment(n)
+    }
+
+    fn increment(self, n: usize) -> Self {
+        Self::new(self.index() + n)
     }
 }
 
-pub struct Generation<T> {
-    current: Id<T>,
+#[derive(Debug, Default)]
+pub struct Generation<I> {
+    current: I,
 }
 
-impl<T> Generation<T> {
-    pub fn new() -> Generation<T> {
-        Generation {
-            current: Id::new(0),
-        }
+impl<I: Idx> Generation<I> {
+    pub fn new() -> Generation<I> {
+        Generation { current: I::new(0) }
     }
 
-    pub fn next(&mut self) -> Id<T> {
+    pub fn next(&mut self) -> I {
         let id = self.current;
-        self.current = Id::new(id.idx + 1);
+        self.current = I::new(self.current.index() + 1);
         id
     }
 }
 
-// The stuff below is because of the lack of perfect derive in Rust.
-
-impl<T> fmt::Debug for Id<T> {
+impl<I: Idx> fmt::Display for Generation<I> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Id").field("idx", &self.idx).finish()
+        write!(f, "Generation({})", self.current)
     }
 }
-
-impl<T> fmt::Display for Id<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Id({})", self.idx)
-    }
-}
-
-impl<T> PartialEq for Id<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.idx == other.idx
-    }
-}
-
-impl<T> Eq for Id<T> {}
-
-impl<T> hash::Hash for Id<T> {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.idx.hash(state);
-    }
-}
-
-impl<T> PartialOrd for Id<T> {
-    fn partial_cmp(&self, other: &Id<T>) -> Option<std::cmp::Ordering> {
-        self.idx.partial_cmp(&other.idx)
-    }
-}
-
-impl<T> Ord for Id<T> {
-    fn cmp(&self, other: &Id<T>) -> std::cmp::Ordering {
-        self.idx.cmp(&other.idx)
-    }
-}
-
-impl<T> Clone for Id<T> {
-    fn clone(&self) -> Id<T> {
-        Id::new(self.idx)
-    }
-}
-
-impl<T> Copy for Id<T> {}

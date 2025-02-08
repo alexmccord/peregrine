@@ -1,11 +1,11 @@
 use crate::ast::decl::{Decl, DeclId, DeclKind};
 use crate::ast::expr::{Expr, ExprId, ExprKind, Stmt};
 use crate::ast::node::NodeId;
-use crate::ast::Ast;
+use crate::ast::{Ast, TokenSpan};
 
 use crate::syn::cursor::{Delimiter, Gate};
-use crate::syn::lexer::{Keyword, Lexer, Token, TokenId, TokenKind};
-use crate::syn::{ParseResult, SyntaxError};
+use crate::syn::lexer::{ByteString, Keyword, Lexer, Token, TokenId, TokenKind};
+use crate::syn::{ParseResult, SourceModule, SyntaxError};
 
 use crate::idx;
 
@@ -13,9 +13,8 @@ pub(crate) struct Parser {
     lexer: Lexer,
     lookahead: Option<TokenId>,
     errors: Vec<(NodeId, SyntaxError)>,
-    tokens: idx::IndexedVec<Token>,
-    exprs: idx::Generation<Expr>,
-    decls: idx::Generation<Decl>,
+    exprs: idx::Generation<ExprId>,
+    decls: idx::Generation<DeclId>,
 }
 
 enum Precedence {
@@ -30,7 +29,6 @@ impl Parser {
             lexer: Lexer::new(input),
             lookahead: None,
             errors: Vec::new(),
-            tokens: idx::IndexedVec::new(),
             exprs: idx::Generation::new(),
             decls: idx::Generation::new(),
         }
@@ -44,9 +42,8 @@ impl Parser {
         assert!(parser.next().is_none());
 
         ParseResult {
-            ast: Ast::new(decls),
+            source_module: SourceModule::new(Ast::new(decls), parser.lexer.into()),
             errors: parser.errors,
-            tokens: parser.tokens,
         }
     }
 
@@ -60,10 +57,7 @@ impl Parser {
             return Some(tok);
         }
 
-        let tok = self.lexer.next_token()?;
-        let id = tok.id();
-        self.tokens.insert(id, tok);
-        Some(id)
+        self.lexer.next()
     }
 
     fn try_consume<F>(&mut self, f: F) -> Option<TokenId>
@@ -78,7 +72,7 @@ impl Parser {
             return None;
         };
 
-        if f(&self.tokens[tok]) {
+        if f(&self.lexer[tok]) {
             self.lookahead.take()
         } else {
             None
@@ -86,11 +80,17 @@ impl Parser {
     }
 
     fn try_parse_kw(&mut self, kw: Keyword) -> Option<TokenId> {
-        self.try_consume(|tok| tok.is_kw(kw))
+        self.try_consume(|tok| match tok.kind() {
+            TokenKind::Kw(kw2) => &kw == kw2,
+            _ => false,
+        })
     }
 
     fn try_parse_operator(&mut self, str: impl AsRef<str>) -> Option<TokenId> {
-        self.try_consume(|tok| tok.is_operator(str))
+        self.try_consume(|tok| match tok.kind() {
+            TokenKind::Operator(op) => op == str.as_ref(),
+            _ => false,
+        })
     }
 
     fn try_parse_delimiter(&mut self, delim: Delimiter) -> Option<TokenId> {
@@ -100,36 +100,58 @@ impl Parser {
         })
     }
 
-    fn make_err_expr(&mut self, err: SyntaxError, id: ExprId) -> Expr {
-        let expr = self.make_expr(ExprKind::Error(Some(id)));
+    fn make_expr_error(
+        &mut self,
+        err: SyntaxError,
+        id: ExprId,
+        begin_tok: TokenId,
+        end_tok: TokenId,
+    ) -> Expr {
+        let expr = self.make_expr(ExprKind::Error(Some(id)), begin_tok, end_tok);
         self.errors.push((expr.id().into(), err));
         expr
     }
 
-    fn report_expr_error(&mut self, err: SyntaxError) -> Expr {
-        let expr = self.make_expr(ExprKind::Error(None));
+    fn report_expr_error(
+        &mut self,
+        err: SyntaxError,
+        begin_tok: TokenId,
+        end_tok: TokenId,
+    ) -> Expr {
+        let expr = self.make_expr(ExprKind::Error(None), begin_tok, end_tok);
         self.errors.push((expr.id().into(), err));
         expr
     }
 
-    fn make_err_decl(&mut self, err: SyntaxError, id: DeclId) -> Decl {
-        let decl = self.make_decl(DeclKind::Error(Some(id)));
+    fn make_decl_error(
+        &mut self,
+        err: SyntaxError,
+        id: DeclId,
+        begin_tok: TokenId,
+        end_tok: TokenId,
+    ) -> Decl {
+        let decl = self.make_decl(DeclKind::Error(Some(id)), begin_tok, end_tok);
         self.errors.push((decl.id().into(), err));
         decl
     }
 
-    fn report_decl_error(&mut self, err: SyntaxError) -> Decl {
-        let decl = self.make_decl(DeclKind::Error(None));
+    fn report_decl_error(
+        &mut self,
+        err: SyntaxError,
+        begin_tok: TokenId,
+        end_tok: TokenId,
+    ) -> Decl {
+        let decl = self.make_decl(DeclKind::Error(None), begin_tok, end_tok);
         self.errors.push((decl.id().into(), err));
         decl
     }
 
-    fn make_expr(&mut self, expr: ExprKind) -> Expr {
-        Expr::new(self.exprs.next(), expr)
+    fn make_expr(&mut self, expr: ExprKind, begin_tok: TokenId, end_tok: TokenId) -> Expr {
+        Expr::new(self.exprs.next(), expr, TokenSpan::new(begin_tok, end_tok))
     }
 
-    fn make_decl(&mut self, decl: DeclKind) -> Decl {
-        Decl::new(self.decls.next(), decl)
+    fn make_decl(&mut self, decl: DeclKind, begin_tok: TokenId, end_tok: TokenId) -> Decl {
+        Decl::new(self.decls.next(), decl, TokenSpan::new(begin_tok, end_tok))
     }
 
     fn parse_decl(&mut self) -> Option<Decl> {
@@ -138,7 +160,7 @@ impl Parser {
     }
 
     fn parse_decl_tail(&mut self, tok: TokenId) -> Option<Decl> {
-        match self.tokens[tok].kind() {
+        match self.lexer[tok].kind() {
             TokenKind::Unknown(_) => todo!(),
             TokenKind::Kw(Keyword::Module) => Some(self.parse_module_tail(tok)),
             TokenKind::Kw(Keyword::Import) => Some(self.parse_import_tail(tok)),
@@ -166,6 +188,7 @@ impl Parser {
             TokenKind::Kw(Keyword::Exists) => None,
             TokenKind::Ident(_) => todo!(),
             TokenKind::Numeral(_) => None,
+            TokenKind::ByteString(_) => None,
             TokenKind::Operator(_) => None,
             TokenKind::Delimiter(Delimiter::Paren(Gate::Opened)) => todo!(),
             TokenKind::Delimiter(_) => todo!(), // TODO: no other delimiters are valid here.
@@ -182,176 +205,215 @@ impl Parser {
         decls
     }
 
-    fn parse_path(&mut self) -> (bool, Vec<String>) {
+    fn parse_path(&mut self) -> (bool, Vec<String>, Option<TokenId>) {
         let mut ok = true;
         let mut path = Vec::new();
+        let mut last_tok = None;
 
         loop {
-            let tok = self.next();
-            if let Some(ident) = tok.map(|id| &self.tokens[id]).and_then(Token::get_ident) {
+            let Some(id) = self.next() else {
+                ok = false;
+                break;
+            };
+
+            last_tok = Some(id);
+
+            if let TokenKind::Ident(ident) = &self.lexer[id].kind() {
                 path.push(ident.clone());
 
-                if self.try_parse_operator(".").is_none() {
+                let dot_tok = self.try_parse_operator(".");
+                if dot_tok.is_none() {
                     break;
+                } else {
+                    last_tok = dot_tok;
                 }
             } else {
                 ok = false;
             }
         }
 
-        (ok, path)
+        (ok, path, last_tok)
     }
 
-    fn parse_module_tail(&mut self, tok: TokenId) -> Decl {
-        let (ok, path) = self.parse_path();
+    fn parse_module_tail(&mut self, module_tok: TokenId) -> Decl {
+        let (ok, path, last_tok) = self.parse_path();
 
+        // TODO: still need to get rid of this
         let decls = self.parse_decls();
 
-        let decl = self.make_decl(DeclKind::module(Some(path), decls));
+        let decl = self.make_decl(
+            DeclKind::module(Some(path), decls),
+            module_tok,
+            last_tok.unwrap_or(module_tok),
+        );
 
         if ok {
             decl
         } else {
-            self.make_err_decl(SyntaxError::MissingName, decl.id())
+            self.make_decl_error(
+                SyntaxError::MissingName,
+                decl.id(),
+                module_tok,
+                last_tok.unwrap_or(module_tok),
+            )
         }
     }
 
-    fn parse_import_tail(&mut self, tok: TokenId) -> Decl {
-        let (ok, path) = self.parse_path();
+    fn parse_import_tail(&mut self, import_tok: TokenId) -> Decl {
+        let (ok, path, last_tok) = self.parse_path();
 
-        let decl = self.make_decl(DeclKind::import(path));
+        let decl = self.make_decl(
+            DeclKind::import(path),
+            import_tok,
+            last_tok.unwrap_or(import_tok),
+        );
 
         if ok {
             decl
         } else {
-            self.make_err_decl(SyntaxError::MissingName, decl.id())
+            self.make_decl_error(
+                SyntaxError::MissingName,
+                decl.id(),
+                import_tok,
+                last_tok.unwrap_or(import_tok),
+            )
         }
     }
 
-    fn parse_export_tail(&mut self, tok: TokenId) -> Decl {
+    fn parse_export_tail(&mut self, export_tok: TokenId) -> Decl {
         if let Some(inner) = self.parse_decl() {
-            return self.make_decl(DeclKind::export(inner));
+            let last_tok = inner.end_token();
+            return self.make_decl(DeclKind::export(inner), export_tok, last_tok);
         }
 
-        self.report_decl_error(SyntaxError::MissingDecl)
+        self.report_decl_error(SyntaxError::MissingDecl, export_tok, export_tok)
     }
 
-    fn parse_public_tail(&mut self, tok: TokenId) -> Decl {
+    fn parse_public_tail(&mut self, public_tok: TokenId) -> Decl {
         if let Some(inner) = self.parse_decl() {
-            return self.make_decl(DeclKind::public(inner));
+            let last_tok = inner.end_token();
+            return self.make_decl(DeclKind::public(inner), public_tok, last_tok);
         }
 
-        self.report_decl_error(SyntaxError::MissingDecl)
+        self.report_decl_error(SyntaxError::MissingDecl, public_tok, public_tok)
     }
 
-    fn parse_open_tail(&mut self, tok: TokenId) -> Decl {
+    fn parse_open_tail(&mut self, open_tok: TokenId) -> Decl {
         if let Some(inner) = self.parse_decl() {
-            return self.make_decl(DeclKind::open(inner));
+            let last_tok = inner.end_token();
+            return self.make_decl(DeclKind::open(inner), open_tok, last_tok);
         }
 
-        self.report_decl_error(SyntaxError::MissingDecl)
+        self.report_decl_error(SyntaxError::MissingDecl, open_tok, open_tok)
     }
 
-    fn parse_struct_tail(&mut self, tok: TokenId) -> Decl {
-        let sig = self
-            .parse_expr(Precedence::TyAnn)
-            .unwrap_or_else(|| self.report_expr_error(SyntaxError::MissingExpr));
+    fn parse_struct_tail(&mut self, struct_tok: TokenId) -> Decl {
+        let sig = self.parse_expr(Precedence::TyAnn).unwrap_or_else(|| {
+            self.report_expr_error(SyntaxError::MissingExpr, struct_tok, struct_tok)
+        });
 
         if self.try_parse_kw(Keyword::Where).is_none() {
-            return self.make_decl(DeclKind::structure(sig, Vec::new()));
+            let last_tok = sig.end_token();
+            return self.make_decl(DeclKind::structure(sig, Vec::new()), struct_tok, last_tok);
         }
 
         todo!("layout rules");
     }
 
-    fn parse_data_tail(&mut self, tok: TokenId) -> Decl {
-        let sig = self
-            .parse_expr(Precedence::TyAnn)
-            .unwrap_or_else(|| self.report_expr_error(SyntaxError::MissingExpr));
+    fn parse_data_tail(&mut self, data_tok: TokenId) -> Decl {
+        let sig = self.parse_expr(Precedence::TyAnn).unwrap_or_else(|| {
+            self.report_expr_error(SyntaxError::MissingExpr, data_tok, data_tok)
+        });
 
-        if self.try_parse_kw(Keyword::Where).is_some() {
+        if let Some(where_tok) = self.try_parse_kw(Keyword::Where) {
             todo!("layout rules");
         }
 
-        if self.try_parse_operator("=").is_some() {
+        if let Some(eq_tok) = self.try_parse_operator("=") {
             todo!("layout rules");
         }
 
-        self.make_decl(DeclKind::empty(sig))
+        let last_tok = sig.end_token();
+        self.make_decl(DeclKind::empty(sig), data_tok, last_tok)
     }
 
-    fn parse_class_tail(&mut self, tok: TokenId) -> Decl {
-        let sig = self
-            .parse_expr(Precedence::TyAnn)
-            .unwrap_or_else(|| self.report_expr_error(SyntaxError::MissingExpr));
+    fn parse_class_tail(&mut self, class_tok: TokenId) -> Decl {
+        let sig = self.parse_expr(Precedence::TyAnn).unwrap_or_else(|| {
+            self.report_expr_error(SyntaxError::MissingExpr, class_tok, class_tok)
+        });
 
-        if self.try_parse_kw(Keyword::Where).is_some() {
+        if let Some(where_tok) = self.try_parse_kw(Keyword::Where) {
             todo!("layout rules");
         }
 
-        self.make_decl(DeclKind::class(sig, Vec::new()))
+        let last_tok = sig.end_token();
+        self.make_decl(DeclKind::class(sig, Vec::new()), class_tok, last_tok)
     }
 
-    fn parse_instance_tail(&mut self, tok: TokenId) -> Decl {
-        let sig = self
-            .parse_expr(Precedence::TyAnn)
-            .unwrap_or_else(|| self.report_expr_error(SyntaxError::MissingExpr));
+    fn parse_instance_tail(&mut self, instance_tok: TokenId) -> Decl {
+        let sig = self.parse_expr(Precedence::TyAnn).unwrap_or_else(|| {
+            self.report_expr_error(SyntaxError::MissingExpr, instance_tok, instance_tok)
+        });
 
-        if self.try_parse_kw(Keyword::Where).is_some() {
+        if let Some(where_tok) = self.try_parse_kw(Keyword::Where) {
             todo!("layout rules");
         }
 
-        self.make_decl(DeclKind::instance(sig, Vec::new()))
+        let last_tok = sig.end_token();
+        self.make_decl(DeclKind::instance(sig, Vec::new()), instance_tok, last_tok)
     }
 
-    fn parse_let_decl_tail(&mut self, tok: TokenId) -> Decl {
+    fn parse_let_decl_tail(&mut self, let_tok: TokenId) -> Decl {
         let f = self
             .parse_expr(Precedence::TyAnn)
-            .unwrap_or_else(|| self.report_expr_error(SyntaxError::MissingExpr));
+            .unwrap_or_else(|| self.report_expr_error(SyntaxError::MissingExpr, let_tok, let_tok));
 
         // TODO: if eq_tok is None and the layout rule did not dedent, then
         // perhaps the user forgot to supply an `= expr`.
         let Some(eq_tok) = self.try_parse_operator("=") else {
-            return self.make_decl(DeclKind::let_the_expr(f));
+            let last_tok = f.end_token();
+            return self.make_decl(DeclKind::let_the_expr(f), let_tok, last_tok);
         };
 
         let Some(e) = self.parse_expr(Precedence::TyAnn) else {
-            let decl = self.make_decl(DeclKind::let_the_expr(f));
-            return self.make_err_decl(SyntaxError::MissingExpr, decl.id());
+            let decl = self.make_decl(DeclKind::let_the_expr(f), let_tok, eq_tok);
+            return self.make_decl_error(SyntaxError::MissingExpr, decl.id(), let_tok, eq_tok);
         };
 
-        let decl = self.make_decl(DeclKind::let_the_expr_be(f, e));
+        let last_tok = e.end_token();
+        let decl = self.make_decl(DeclKind::let_the_expr_be(f, e), let_tok, last_tok);
 
-        if self.try_parse_kw(Keyword::In).is_none() {
+        // We're parsing `in` here just for error reporting.
+        let Some(in_tok) = self.try_parse_kw(Keyword::In) else {
             return decl;
         };
 
         let i = self.parse_expr(Precedence::TyAnn);
-        self.make_err_decl(
-            SyntaxError::LetDeclCannotHaveIn(i.map(|e| e.id())),
+        self.make_decl_error(
+            SyntaxError::LetDeclCannotHaveIn(i.as_ref().map(|e| e.id())),
             decl.id(),
+            let_tok,
+            i.map(|e| e.end_token()).unwrap_or(in_tok),
         )
     }
 
     // TODO: Stop using Option<Expr> here and rely on layout rules
     fn parse_expr(&mut self, pred: Precedence) -> Option<Expr> {
         match pred {
-            Precedence::TyAnn => Some(self.parse_ty_expr()),
+            Precedence::TyAnn => self.parse_ty_expr(),
             Precedence::App => self.parse_app_expr(),
             Precedence::Assoc => self.parse_assoc_expr(),
         }
     }
 
-    fn parse_ty_expr(&mut self) -> Expr {
-        let expr = self
-            .parse_expr(Precedence::App)
-            .unwrap_or_else(|| self.report_expr_error(SyntaxError::MissingExpr));
+    fn parse_ty_expr(&mut self) -> Option<Expr> {
+        let expr = self.parse_expr(Precedence::App)?;
 
-        self.parse_ty_expr_tail(expr)
+        Some(self.parse_ty_expr_tail(expr))
     }
 
     fn parse_ty_expr_tail(&mut self, expr: Expr) -> Expr {
-        if self.try_parse_operator(":").is_none() {
+        let Some(colon_tok) = self.try_parse_operator(":") else {
             return expr;
         };
 
@@ -359,12 +421,17 @@ impl Parser {
         // No need for a whole separate language for types. :)
         let ty = self.parse_expr(Precedence::App);
 
-        match ty {
-            Some(ty) => self.make_expr(ExprKind::ann(expr, ty)),
-            None => {
-                let ty = self.report_expr_error(SyntaxError::MissingExpr);
+        let first_tok = expr.begin_token();
 
-                self.make_expr(ExprKind::ann(expr, ty))
+        match ty {
+            Some(ty) => {
+                let last_tok = ty.end_token();
+                self.make_expr(ExprKind::ann(expr, ty), first_tok, last_tok)
+            }
+            None => {
+                let ty = self.report_expr_error(SyntaxError::MissingExpr, colon_tok, colon_tok);
+                let last_tok = ty.end_token();
+                self.make_expr(ExprKind::ann(expr, ty), first_tok, last_tok)
             }
         }
     }
@@ -372,7 +439,7 @@ impl Parser {
     fn parse_app_expr(&mut self) -> Option<Expr> {
         let tok = self.next()?;
 
-        match self.tokens[tok].kind() {
+        match self.lexer[tok].kind() {
             TokenKind::Unknown(_) => todo!(),
             TokenKind::Kw(Keyword::Module) => None,
             TokenKind::Kw(Keyword::Import) => todo!(), // TODO: support, scoped imports are nice.
@@ -398,99 +465,157 @@ impl Parser {
             TokenKind::Kw(Keyword::With) => None,
             TokenKind::Kw(Keyword::Forall) => todo!(), // TODO: support
             TokenKind::Kw(Keyword::Exists) => todo!(), // TODO: support
-            TokenKind::Ident(ident) => Some(self.make_expr(ExprKind::var(ident.clone()))),
-            TokenKind::Numeral(n) => Some(self.make_expr(ExprKind::num(n.clone()))),
+            TokenKind::Ident(ident) => Some(self.parse_ident_tail(tok, ident.clone())),
+            TokenKind::Numeral(num) => Some(self.parse_numeral_tail(tok, num.clone())),
+            TokenKind::ByteString(s) => Some(self.parse_string_tail(tok, s.clone())),
             TokenKind::Operator(_) => todo!(),
             TokenKind::Delimiter(Delimiter::Paren(Gate::Opened)) => {
-                // Two missed opportunities to report errors.
-                let e = self.parse_expr(Precedence::Assoc);
-                self.try_parse_delimiter(Delimiter::Paren(Gate::Closed));
-                e
+                Some(self.parse_assoc_expr_tail(tok))
             }
             TokenKind::Delimiter(Delimiter::Brace(Gate::Opened)) => todo!(),
             TokenKind::Delimiter(Delimiter::Bracket(Gate::Opened)) => todo!(),
-            TokenKind::Delimiter(
-                d @ (Delimiter::Paren(Gate::Closed)
-                | Delimiter::Brace(Gate::Closed)
-                | Delimiter::Bracket(Gate::Closed)),
-            ) => Some(self.report_expr_error(SyntaxError::NotBalanced(d.clone()))),
+            TokenKind::Delimiter(Delimiter::Paren(Gate::Closed)) => None,
+            TokenKind::Delimiter(Delimiter::Brace(Gate::Closed)) => None,
+            TokenKind::Delimiter(Delimiter::Bracket(Gate::Closed)) => None,
             TokenKind::Delimiter(Delimiter::Semicolon) => todo!(), // TODO: error,
             TokenKind::Delimiter(Delimiter::Comma) => todo!(),     // TODO: error,
         }
     }
 
-    fn parse_let_expr_tail(&mut self, tok: TokenId) -> Expr {
+    fn parse_let_expr_tail(&mut self, let_tok: TokenId) -> Expr {
         let Some(f) = self.parse_expr(Precedence::TyAnn) else {
-            return self.report_expr_error(SyntaxError::MissingExpr);
+            return self.report_expr_error(SyntaxError::MissingExpr, let_tok, let_tok);
         };
 
-        if self.try_parse_operator("=").is_none() {
-            let e = self.report_expr_error(SyntaxError::LetExprIsRequiredToHaveEquations);
-            return self.make_expr(ExprKind::let_be(f, e));
-        }
+        let Some(eq_tok) = self.try_parse_operator("=") else {
+            let first_tok = f.begin_token();
+            let last_tok = f.end_token();
+
+            // We want the error span to be at:
+            //
+            //  let f x
+            //      ~~~
+            let e = self.report_expr_error(
+                SyntaxError::LetExprIsRequiredToHaveEquations,
+                first_tok,
+                last_tok,
+            );
+
+            return self.make_expr(ExprKind::let_be(f, e), let_tok, last_tok);
+        };
 
         let Some(e) = self.parse_expr(Precedence::TyAnn) else {
-            let e = self.report_expr_error(SyntaxError::MissingExpr);
-            return self.make_expr(ExprKind::let_be(f, e));
+            let e = self.report_expr_error(SyntaxError::MissingExpr, eq_tok, eq_tok);
+            return self.make_expr(ExprKind::let_be(f, e), let_tok, eq_tok);
         };
 
-        if self.try_parse_kw(Keyword::In).is_none() {
-            return self.make_expr(ExprKind::let_be(f, e));
+        let Some(in_tok) = self.try_parse_kw(Keyword::In) else {
+            let last_tok = e.end_token();
+            return self.make_expr(ExprKind::let_be(f, e), let_tok, last_tok);
         };
 
         let Some(i) = self.parse_expr(Precedence::TyAnn) else {
-            let i = self.report_expr_error(SyntaxError::MissingExpr);
-            return self.make_expr(ExprKind::let_be_in(f, e, i));
+            let i = self.report_expr_error(SyntaxError::MissingExpr, in_tok, in_tok);
+            return self.make_expr(ExprKind::let_be_in(f, e, i), let_tok, in_tok);
         };
 
-        self.make_expr(ExprKind::let_be_in(f, e, i))
+        let last_tok = i.end_token();
+        self.make_expr(ExprKind::let_be_in(f, e, i), let_tok, last_tok)
     }
 
-    fn parse_do_expr_tail(&mut self, tok: TokenId) -> Expr {
+    fn parse_do_expr_tail(&mut self, do_tok: TokenId) -> Expr {
         let mut stmts = Vec::new();
 
         while let Some(expr) = self.parse_expr(Precedence::TyAnn) {
             stmts.push(Stmt::new(expr));
         }
 
-        self.make_expr(ExprKind::do_notation(stmts))
+        let last_tok = stmts.last().map(|s| s.0.end_token()).unwrap_or(do_tok);
+        self.make_expr(ExprKind::do_notation(stmts), do_tok, last_tok)
     }
 
-    fn parse_if_expr_tail(&mut self, tok: TokenId) -> Expr {
+    fn parse_if_expr_tail(&mut self, if_tok: TokenId) -> Expr {
         let antecedent = self
             .parse_expr(Precedence::TyAnn)
-            .unwrap_or_else(|| self.report_expr_error(SyntaxError::MissingExpr));
+            .unwrap_or_else(|| self.report_expr_error(SyntaxError::MissingExpr, if_tok, if_tok));
         let then_tok = self.try_parse_kw(Keyword::Then);
-        let consequent = self
-            .parse_expr(Precedence::TyAnn)
-            .unwrap_or_else(|| self.report_expr_error(SyntaxError::MissingExpr));
+        let last_tok = then_tok.unwrap_or(if_tok);
+        let consequent = self.parse_expr(Precedence::TyAnn).unwrap_or_else(|| {
+            self.report_expr_error(SyntaxError::MissingExpr, last_tok, last_tok)
+        });
         let else_tok = self.try_parse_kw(Keyword::Else);
-        let alternative = self
-            .parse_expr(Precedence::TyAnn)
-            .unwrap_or_else(|| self.report_expr_error(SyntaxError::MissingExpr));
+        let last_tok = else_tok.unwrap_or(last_tok);
+        let alternative = self.parse_expr(Precedence::TyAnn).unwrap_or_else(|| {
+            self.report_expr_error(SyntaxError::MissingExpr, last_tok, last_tok)
+        });
+
+        let last_tok = alternative.end_token();
 
         if then_tok.is_some() && else_tok.is_some() {
-            return self.make_expr(ExprKind::if_then_else(antecedent, consequent, alternative));
+            return self.make_expr(
+                ExprKind::if_then_else(antecedent, consequent, alternative),
+                if_tok,
+                last_tok,
+            );
         }
 
-        let expr = self.make_expr(ExprKind::if_then_else(antecedent, consequent, alternative));
+        let expr = self.make_expr(
+            ExprKind::if_then_else(antecedent, consequent, alternative),
+            if_tok,
+            last_tok,
+        );
+
         let err = SyntaxError::IfExpr {
             missing_if_kw: false,
             missing_then_kw: then_tok.is_none(),
             missing_else_kw: else_tok.is_none(),
         };
 
-        self.make_err_expr(err, expr.id())
+        self.make_expr_error(err, expr.id(), if_tok, last_tok)
+    }
+
+    fn parse_ident_tail(&mut self, ident_tok: TokenId, ident: String) -> Expr {
+        self.make_expr(ExprKind::var(ident), ident_tok, ident_tok)
+    }
+
+    fn parse_numeral_tail(&mut self, num_tok: TokenId, num: String) -> Expr {
+        self.make_expr(ExprKind::num(num), num_tok, num_tok)
+    }
+
+    fn parse_string_tail(&mut self, str_tok: TokenId, str: ByteString) -> Expr {
+        self.make_expr(ExprKind::str(str), str_tok, str_tok)
+    }
+
+    fn parse_assoc_expr_tail(&mut self, opened_tok: TokenId) -> Expr {
+        // Two missed opportunities to report errors.
+        let e = self.parse_expr(Precedence::Assoc);
+        let Some(closed_tok) = self.try_parse_delimiter(Delimiter::Paren(Gate::Closed)) else {
+            let err = SyntaxError::NotBalanced(Delimiter::Paren(Gate::Closed));
+            return match e {
+                Some(e) => self.make_expr_error(err, e.id(), opened_tok, e.end_token()),
+                None => self.report_expr_error(
+                    SyntaxError::NotBalanced(Delimiter::Paren(Gate::Closed)),
+                    opened_tok,
+                    opened_tok,
+                ),
+            };
+        };
+
+        match e {
+            Some(e) => self.make_expr(ExprKind::assoc(e), opened_tok, closed_tok),
+            None => self.make_expr(ExprKind::unit(), opened_tok, closed_tok),
+        }
     }
 
     fn parse_assoc_expr(&mut self) -> Option<Expr> {
         let tok = self.next()?;
 
-        match self.tokens[tok].kind() {
+        match self.lexer[tok].kind() {
             TokenKind::Unknown(_) => todo!(),
             TokenKind::Kw(_) => todo!(),
             TokenKind::Ident(_) => todo!(),
             TokenKind::Numeral(_) => todo!(),
+            TokenKind::ByteString(_) => todo!(),
             TokenKind::Operator(_) => todo!(),
             TokenKind::Delimiter(_) => todo!(),
         }
@@ -499,19 +624,19 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::{decl, expr};
+    use crate::ast::{decl, expr, Position};
     use crate::syn;
 
     #[test]
     fn parse_nothing() {
         let result = syn::parse("");
-        assert!(result.ast.decls().is_empty());
+        assert!(result.ast().decls().is_empty());
     }
 
     #[test]
     fn parse_module_decl() {
         let result = syn::parse("module A.B.C");
-        let mut iter = result.ast.decls().iter();
+        let mut iter = result.ast().decls().iter();
 
         let module_decl = iter.next().unwrap();
         let module = module_decl.as_module().unwrap();
@@ -524,19 +649,24 @@ mod tests {
     #[test]
     fn parse_import_decl() {
         let result = syn::parse("import A.B.C");
-        let mut iter = result.ast.decls().iter();
+        let source_module = &result.source_module;
+        let mut iter = result.ast().decls().iter();
 
         let import_decl = iter.next().unwrap();
         let import = import_decl.as_import().unwrap();
         assert_eq!(import.path(), &vec!["A", "B", "C"]);
+
+        let import_src_span = source_module.source_span(import_decl);
+        assert_eq!(import_src_span.begin, Position::new(1, 0));
+        assert_eq!(import_src_span.end, Position::new(1, 12));
 
         assert!(iter.next().is_none());
     }
 
     #[test]
     fn parse_export_decl() {
-        let result = syn::parse("export let five = 5");
-        let mut iter = result.ast.decls().iter();
+        let source_module = syn::parse("export let five = 5").source_module;
+        let mut iter = source_module.ast.decls().iter();
 
         let export_decl = iter.next().unwrap();
         let export = export_decl.as_export().unwrap();
@@ -556,8 +686,8 @@ mod tests {
 
     #[test]
     fn parse_let_five_be_5() {
-        let result = syn::parse("let five = 5");
-        let mut iter = result.ast.decls().iter();
+        let source_module = syn::parse("let five = 5").source_module;
+        let mut iter = source_module.ast.decls().iter();
 
         let let_decl = iter.next().unwrap();
         let l = let_decl.as_let().unwrap();
@@ -576,8 +706,8 @@ mod tests {
 
     #[test]
     fn parse_let_paren_x_paren_be_2() {
-        let result = syn::parse("let (x) = 2");
-        let mut iter = result.ast.decls().iter();
+        let source_module = syn::parse("let (x) = 2").source_module;
+        let mut iter = source_module.ast.decls().iter();
 
         let let_decl = iter.next().unwrap();
         let l = let_decl.as_let().unwrap();
@@ -596,8 +726,8 @@ mod tests {
 
     #[test]
     fn parse_let_id_which_is_a_to_a() {
-        let result = syn::parse("let id : a -> a");
-        let mut iter = result.ast.decls().iter();
+        let source_module = syn::parse("let id : a -> a").source_module;
+        let mut iter = source_module.ast.decls().iter();
 
         let let_decl = iter.next().unwrap();
         let l = let_decl.as_let().unwrap();
@@ -625,8 +755,8 @@ mod tests {
 
     #[test]
     fn parse_let_id_x_be_x() {
-        let result = syn::parse("let id x = x");
-        let mut iter = result.ast.decls().iter();
+        let source_module = syn::parse("let id x = x").source_module;
+        let mut iter = source_module.ast.decls().iter();
 
         let let_decl = iter.next().unwrap();
         let l = let_decl.as_let().unwrap();
@@ -649,7 +779,10 @@ mod tests {
     #[test]
     fn parse_let_five_of_missing_type() {
         let result = syn::parse("let five :");
-        let mut decls = result.ast.decls().iter();
+        let source_module = result.source_module;
+        let errors = result.errors;
+
+        let mut decls = source_module.ast.decls().iter();
 
         let let_decl = decls.next().unwrap();
         let l = let_decl.as_let().unwrap();
@@ -662,14 +795,27 @@ mod tests {
                 assert_eq!(five, "five");
                 assert_eq!(t.as_error().unwrap(), None);
 
-                let error = result
-                    .errors
+                let error = errors
                     .iter()
                     .find_map(|(id, e)| (id == &t.id()).then_some(e))
                     .unwrap();
 
                 assert_eq!(error, &syn::SyntaxError::MissingExpr);
             }
+        }
+    }
+
+    #[test]
+    fn parse_unit() {
+        let source_module = syn::parse("let unit = ()").source_module;
+        let mut decls = source_module.ast.decls().iter();
+
+        let let_decl = decls.next().unwrap();
+        let l = let_decl.as_let().unwrap();
+
+        match l {
+            decl::Let::Decl(_) => panic!("not this one"),
+            decl::Let::DeclExpr(_, e) => assert!(e.is_unit()),
         }
     }
 

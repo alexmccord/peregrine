@@ -1,11 +1,17 @@
+use crate::ast::TokenSpan;
+
 use crate::idx;
 
-pub type ExprId = idx::Id<Expr>;
+use crate::syn::lexer::ByteString;
+use crate::syn::lexer::TokenId;
+
+idx::newindex!(pub ExprId);
 
 #[derive(Debug)]
 pub struct Expr {
     id: ExprId,
     kind: ExprKind,
+    token_span: TokenSpan,
 }
 
 #[derive(Debug)]
@@ -20,6 +26,8 @@ pub enum ExprKind {
     Ann(Ann),
     // 5
     Num(Num),
+    // "str"
+    Str(Str),
     // ()
     Unit,
     // let e = x
@@ -64,6 +72,9 @@ pub struct Ann(pub Box<Expr>, pub Box<Expr>);
 pub struct Num(pub String);
 
 #[derive(Debug)]
+pub struct Str(pub ByteString);
+
+#[derive(Debug)]
 pub enum Let {
     DeclExpr(Box<Expr>, Box<Expr>),
     DeclExprIn(Box<Expr>, Box<Expr>, Box<Expr>),
@@ -98,8 +109,12 @@ pub struct Forall(pub Box<Expr>, pub Box<Expr>);
 pub struct Exists(pub Box<Expr>, pub Box<Expr>);
 
 impl Expr {
-    pub fn new(id: ExprId, kind: ExprKind) -> Expr {
-        Expr { id, kind }
+    pub fn new(id: ExprId, kind: ExprKind, token_span: TokenSpan) -> Expr {
+        Expr {
+            id,
+            kind,
+            token_span,
+        }
     }
 
     pub fn id(&self) -> ExprId {
@@ -108,6 +123,18 @@ impl Expr {
 
     pub fn kind(&self) -> &ExprKind {
         &self.kind
+    }
+
+    pub fn token_span(&self) -> TokenSpan {
+        self.token_span.clone()
+    }
+
+    pub fn begin_token(&self) -> TokenId {
+        self.token_span.begin
+    }
+
+    pub fn end_token(&self) -> TokenId {
+        self.token_span.end
     }
 
     pub fn as_var(&self) -> Option<&Var> {
@@ -234,6 +261,10 @@ impl ExprKind {
         ExprKind::Num(Num::new(num))
     }
 
+    pub fn str(str: ByteString) -> ExprKind {
+        ExprKind::Str(Str::new(str))
+    }
+
     pub fn unit() -> ExprKind {
         ExprKind::Unit
     }
@@ -334,6 +365,12 @@ impl Num {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+impl Str {
+    pub fn new(str: ByteString) -> Str {
+        Str(str)
     }
 }
 

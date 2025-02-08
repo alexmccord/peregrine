@@ -4,6 +4,8 @@ pub mod node;
 
 use decl::Decl;
 
+use crate::syn::lexer::TokenId;
+
 pub struct Ast {
     decls: Vec<Decl>,
 }
@@ -40,14 +42,26 @@ impl Position {
     }
 }
 
-#[derive(Debug)]
-pub struct Span {
+#[derive(Debug, Clone)]
+pub struct SourceSpan {
     pub begin: Position,
     pub end: Position,
 }
 
-impl Span {
-    pub fn new(begin: Position, end: Position) -> Span {
-        Span { begin, end }
+impl SourceSpan {
+    pub fn new(begin: Position, end: Position) -> SourceSpan {
+        SourceSpan { begin, end }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TokenSpan {
+    pub begin: TokenId,
+    pub end: TokenId,
+}
+
+impl TokenSpan {
+    pub fn new(begin: TokenId, end: TokenId) -> TokenSpan {
+        TokenSpan { begin, end }
     }
 }

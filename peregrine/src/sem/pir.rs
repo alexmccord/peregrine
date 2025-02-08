@@ -52,14 +52,15 @@ impl Context {
     }
 }
 
-pub type TermId = idx::Id<Term>;
-pub type TermArena = idx::Generation<Term>;
-
 #[derive(Debug)]
 pub struct Binding(Var, TermId);
 
 #[derive(Debug)]
 pub struct Sort(Universe);
+
+idx::newindex!(pub TermId);
+
+pub type TermVec = idx::IndexedVec<TermId, Term>;
 
 pub struct Term {
     id: TermId,
@@ -145,30 +146,30 @@ mod tests {
 
     #[test]
     fn check_var_in_context() {
-        let mut arena = TermArena::new();
+        let mut terms = TermVec::new();
         let mut ctx = Context::new();
 
         let a = Sort(Universe::Uni(Level(0)));
-        let a_term = Term::new(arena.next(), TermKind::Sort(a));
+        let a_term = terms.allocate(|id| Term::new(id, TermKind::Sort(a)));
 
         let x = Var(0);
-        let x_term = Term::new(arena.next(), TermKind::Var(x));
+        let x_term = terms.allocate(|id| Term::new(id, TermKind::Var(x)));
 
-        ctx.insert(x, a_term.id());
+        ctx.insert(x, a_term);
 
-        let res = check(&ctx, &x_term);
+        let res = check(&ctx, &terms[x_term]);
         assert_eq!(res, Ok(()));
     }
 
     #[test]
     fn check_var_not_in_context() {
-        let mut arena = TermArena::new();
+        let mut terms = TermVec::new();
         let ctx = Context::new();
 
         let x = Var(0);
-        let x_term = Term::new(arena.next(), TermKind::Var(x));
+        let x_term = terms.allocate(|id| Term::new(id, TermKind::Var(x)));
 
-        let res = check(&ctx, &x_term);
+        let res = check(&ctx, &terms[x_term]);
         assert_eq!(res, Err(TypingError::UnknownVar(x)));
     }
 }

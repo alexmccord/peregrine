@@ -1,9 +1,9 @@
 #![cfg(test)]
 
-use crate::idx::Id;
+use crate::idx;
+use crate::idx::Idx;
 
-struct Foo;
-type FooId = Id<Foo>;
+idx::newindex!(FooId);
 
 #[test]
 fn can_debug() {
@@ -51,32 +51,6 @@ fn can_eq() {
 fn can_hash() {
     let id = FooId::new(0);
     std::hash::Hash::hash(&id, &mut std::hash::DefaultHasher::new());
-}
-
-#[test]
-fn can_partialord() {
-    fn f<T: PartialOrd>(lhs: T, rhs: T) -> bool {
-        lhs < rhs
-    }
-
-    let id1 = FooId::new(0);
-    let id2 = FooId::new(1);
-    assert!(f(id1, id2));
-    assert!(!f(id1, id1));
-    assert!(!f(id2, id1));
-}
-
-#[test]
-fn can_ord() {
-    fn f<T: Ord>(lhs: T, rhs: T) -> bool {
-        lhs < rhs
-    }
-
-    let id1 = FooId::new(0);
-    let id2 = FooId::new(1);
-    assert!(f(id1, id2));
-    assert!(!f(id1, id1));
-    assert!(!f(id2, id1));
 }
 
 #[test]

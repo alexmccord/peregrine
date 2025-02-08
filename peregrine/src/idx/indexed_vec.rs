@@ -1,139 +1,184 @@
+use std::marker::PhantomData;
 use std::ops;
 
-use crate::idx::Id;
+use super::Idx;
 
 #[derive(Debug, Clone)]
-pub struct IndexedVec<T> {
-    sparse: Vec<Option<usize>>,
-    dense: Vec<T>,
+pub struct IndexedVec<I, T> {
+    inner: Vec<T>,
+    marker: PhantomData<fn(I)>,
 }
 
-impl<T> IndexedVec<T> {
-    pub fn new() -> IndexedVec<T> {
+impl<I: Idx, T> IndexedVec<I, T> {
+    pub fn new() -> IndexedVec<I, T> {
         IndexedVec {
-            sparse: Vec::new(),
-            dense: Vec::new(),
+            inner: Vec::new(),
+            marker: PhantomData,
         }
     }
 
-    pub fn insert(&mut self, id: Id<T>, value: T) -> Option<T> {
-        if id.idx >= self.sparse.len() {
-            self.sparse.resize_with(id.idx + 1, Default::default);
-        }
-
-        match self.sparse[id.idx] {
-            Some(i) => Some(std::mem::replace(&mut self.dense[i], value)),
-            None => {
-                self.sparse[id.idx].replace(self.dense.len());
-                self.dense.push(value);
-                None
-            }
-        }
+    pub fn allocate<F>(&mut self, f: F) -> I
+    where
+        F: FnOnce(I) -> T,
+    {
+        let id = I::new(self.inner.len());
+        self.inner.push(f(id));
+        id
     }
 
-    pub fn get(&self, id: Id<T>) -> Option<&T> {
-        self.sparse[id.idx].and_then(|i| self.dense.get(i))
+    pub fn push(&mut self, value: T) -> I {
+        let id = I::new(self.inner.len());
+        self.inner.push(value);
+        id
     }
 
-    pub fn get_mut(&mut self, id: Id<T>) -> Option<&mut T> {
-        self.sparse[id.idx].and_then(|i| self.dense.get_mut(i))
+    pub fn get(&self, id: I) -> Option<&T> {
+        self.inner.get(id.index())
+    }
+
+    pub fn get_mut(&mut self, id: I) -> Option<&mut T> {
+        self.inner.get_mut(id.index())
     }
 
     pub fn len(&self) -> usize {
-        self.dense.len()
+        self.inner.len()
     }
 }
 
-impl<T> ops::Index<Id<T>> for IndexedVec<T> {
+impl<I: Idx, T> Default for IndexedVec<I, T> {
+    fn default() -> Self {
+        IndexedVec::new()
+    }
+}
+
+impl<I: Idx, T> ops::Index<I> for IndexedVec<I, T> {
     type Output = T;
 
-    fn index(&self, index: Id<T>) -> &Self::Output {
-        self.get(index).unwrap()
+    fn index(&self, index: I) -> &Self::Output {
+        &self.inner[index.index()]
     }
 }
 
-impl<T> ops::IndexMut<Id<T>> for IndexedVec<T> {
-    fn index_mut(&mut self, index: Id<T>) -> &mut Self::Output {
-        self.get_mut(index).unwrap()
+impl<I: Idx, T> ops::IndexMut<I> for IndexedVec<I, T> {
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        &mut self.inner[index.index()]
+    }
+}
+
+impl<I, T> IntoIterator for IndexedVec<I, T> {
+    type Item = T;
+
+    type IntoIter = std::vec::IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
+}
+
+impl<I: Idx, T> FromIterator<T> for IndexedVec<I, T> {
+    fn from_iter<Iter: IntoIterator<Item = T>>(iter: Iter) -> Self {
+        let mut ivec = IndexedVec::new();
+
+        for item in iter {
+            ivec.push(item);
+        }
+
+        ivec
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Id;
+    use crate::idx;
+
+    use super::Idx;
     use super::IndexedVec;
+
+    idx::newindex!(TestId);
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct Test {
+        id: TestId,
+        value: u32,
+    }
+
+    impl Test {
+        fn new(id: TestId, value: u32) -> Test {
+            Test { id, value }
+        }
+    }
 
     #[test]
     fn get() {
-        let mut ivec = IndexedVec::new();
+        let mut vec = IndexedVec::new();
 
-        ivec.insert(Id::new(0), 5);
-        assert_eq!(ivec.get(Id::new(0)), Some(&5));
+        let id = vec.allocate(|id| Test::new(id, 5));
+        assert_eq!(vec.get(id), Some(&Test::new(id, 5)));
     }
 
     #[test]
     fn get_mut() {
-        let mut ivec = IndexedVec::new();
+        let mut vec = IndexedVec::new();
 
-        ivec.insert(Id::new(0), 5);
-        ivec.get_mut(Id::new(0)).map(|v| *v = 7);
-        assert_eq!(ivec.get(Id::new(0)), Some(&7));
+        let id = vec.allocate(|id| Test::new(id, 5));
+        vec.get_mut(id).map(|t| t.value = 7);
+        assert_eq!(vec.get(id), Some(&Test::new(id, 7)));
     }
 
     #[test]
     fn overwriting() {
-        let mut ivec = IndexedVec::new();
+        let mut vec = IndexedVec::new();
 
-        ivec.insert(Id::new(0), 5);
-        assert_eq!(ivec.get(Id::new(0)), Some(&5));
+        let id = vec.allocate(|id| Test::new(id, 5));
+        assert_eq!(vec.get(id), Some(&Test::new(id, 5)));
 
-        ivec.insert(Id::new(0), 7);
-        assert_eq!(ivec.get(Id::new(0)), Some(&7));
+        vec[id].value = 7;
+        assert_eq!(vec.get(id), Some(&Test::new(id, 7)));
     }
 
     #[test]
     fn you_can_have_a_bunch() {
-        let mut ivec = IndexedVec::new();
+        let mut vec = IndexedVec::new();
 
+        let mut last_id = TestId::new(usize::MAX);
         for i in 0..200 {
-            ivec.insert(Id::new(i), i);
+            last_id = vec.allocate(|id| Test::new(id, i));
         }
 
-        assert_eq!(ivec.sparse.len(), 200);
-        assert_eq!(ivec.sparse.last(), Some(&Some(199)));
-        assert_eq!(ivec.dense.len(), 200);
-        assert_eq!(ivec.len(), ivec.dense.len());
+        assert_eq!(vec.inner.len(), vec.len());
+        assert_eq!(vec.inner.len(), 200);
+        assert_eq!(vec.inner.last(), Some(&Test::new(last_id, 199)));
     }
 
     #[test]
     fn you_can_have_some_things() {
-        let mut ivec = IndexedVec::new();
+        let mut vec = IndexedVec::new();
 
+        let mut last_id = TestId::new(usize::MAX);
         for i in 0..200 {
             if i % 5 == 0 {
-                ivec.insert(Id::new(i), i);
+                last_id = vec.allocate(|id| Test::new(id, i));
             }
         }
 
-        assert_eq!(ivec.sparse.len(), 196);
-        assert_eq!(ivec.sparse.last(), Some(&Some(39)));
-        assert_eq!(ivec.dense.len(), 40);
-        assert_eq!(ivec.len(), ivec.dense.len());
+        assert_eq!(vec.inner.len(), vec.len());
+        assert_eq!(vec.inner.len(), 40);
+        assert_eq!(vec.inner.last(), Some(&Test::new(last_id, 195)));
     }
 
     #[test]
     fn index() {
-        let mut ivec = IndexedVec::new();
+        let mut vec = IndexedVec::new();
 
-        ivec.insert(Id::new(0), 0);
-        assert_eq!(ivec[Id::new(0)], 0);
+        let id = vec.allocate(|id| Test::new(id, 0));
+        assert_eq!(&vec[id], &Test::new(id, 0));
     }
 
     #[test]
     fn index_mut() {
-        let mut ivec = IndexedVec::new();
+        let mut vec = IndexedVec::new();
 
-        ivec.insert(Id::new(0), 0);
-        assert_eq!(&mut ivec[Id::new(0)], &mut 0);
+        let id = vec.allocate(|id| Test::new(id, 0));
+        assert_eq!(&mut vec[id], &mut Test::new(id, 0));
     }
 }

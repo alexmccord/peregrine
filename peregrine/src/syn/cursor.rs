@@ -2,7 +2,82 @@
 pub struct Alpha(pub char);
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub struct Digit(pub char);
+pub enum Digit {
+    Zero,
+    One,
+    Two,
+    Three,
+    Four,
+    Five,
+    Six,
+    Seven,
+    Eight,
+    Nine,
+}
+
+impl Digit {
+    pub fn to_char(self) -> char {
+        self.as_byte().into()
+    }
+
+    pub fn as_byte(self) -> u8 {
+        match self {
+            Digit::Zero => b'0',
+            Digit::One => b'1',
+            Digit::Two => b'2',
+            Digit::Three => b'3',
+            Digit::Four => b'4',
+            Digit::Five => b'5',
+            Digit::Six => b'6',
+            Digit::Seven => b'7',
+            Digit::Eight => b'8',
+            Digit::Nine => b'9',
+        }
+    }
+
+    pub fn from_byte(c: u8) -> Option<Digit> {
+        match c {
+            b'0' => Some(Digit::Zero),
+            b'1' => Some(Digit::One),
+            b'2' => Some(Digit::Two),
+            b'3' => Some(Digit::Three),
+            b'4' => Some(Digit::Four),
+            b'5' => Some(Digit::Five),
+            b'6' => Some(Digit::Six),
+            b'7' => Some(Digit::Seven),
+            b'8' => Some(Digit::Eight),
+            b'9' => Some(Digit::Nine),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Quotation {
+    Single, // 'a'
+    Double, // "a"
+}
+
+impl Quotation {
+    pub fn to_char(self) -> char {
+        self.as_byte().into()
+    }
+
+    pub(crate) fn as_byte(self) -> u8 {
+        match self {
+            Quotation::Single => b'\'',
+            Quotation::Double => b'\"',
+        }
+    }
+
+    pub(crate) fn from_byte(c: u8) -> Option<Quotation> {
+        match c {
+            b'\'' => Some(Quotation::Single),
+            b'\"' => Some(Quotation::Double),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Operator(pub char);
@@ -23,7 +98,21 @@ pub enum Delimiter {
 }
 
 impl Delimiter {
-    pub(crate) fn as_byte(&self) -> u8 {
+    pub fn to_char(self) -> char {
+        self.as_byte().into()
+    }
+
+    pub fn len(self) -> usize {
+        match self {
+            Delimiter::Paren(_) => 1,
+            Delimiter::Brace(_) => 1,
+            Delimiter::Bracket(_) => 1,
+            Delimiter::Semicolon => 1,
+            Delimiter::Comma => 1,
+        }
+    }
+
+    pub(crate) fn as_byte(self) -> u8 {
         match self {
             Delimiter::Paren(Gate::Opened) => b'(',
             Delimiter::Paren(Gate::Closed) => b')',
@@ -34,10 +123,6 @@ impl Delimiter {
             Delimiter::Semicolon => b';',
             Delimiter::Comma => b',',
         }
-    }
-
-    pub fn to_char(&self) -> char {
-        self.as_byte().into()
     }
 
     pub(crate) fn from_byte(c: u8) -> Option<Delimiter> {
@@ -53,31 +138,44 @@ impl Delimiter {
             _ => None,
         }
     }
+}
 
-    pub fn len(&self) -> usize {
-        match self {
-            Delimiter::Paren(..) => 1,
-            Delimiter::Brace(..) => 1,
-            Delimiter::Bracket(..) => 1,
-            Delimiter::Semicolon => 1,
-            Delimiter::Comma => 1,
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Space {
+    Space,
+    Tab,
+}
+
+impl Space {
+    pub fn from_byte(c: u8) -> Option<Space> {
+        match c {
+            b' ' => Some(Space::Space),
+            b'\t' => Some(Space::Tab),
+            _ => None,
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Space(pub char);
-
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Newline {
     LF,   // \n
     CRLF, // \r\n
+}
+
+impl Newline {
+    pub fn len(self) -> usize {
+        match self {
+            Newline::LF => 1,
+            Newline::CRLF => 2,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Grapheme {
     Alpha(Alpha),
     Digit(Digit),
+    Quot(Quotation),
     Operator(Operator),
     Delimiter(Delimiter),
     Space(Space),
@@ -91,17 +189,18 @@ impl Grapheme {
         match self {
             Grapheme::Alpha(_) => 1,
             Grapheme::Digit(_) => 1,
+            Grapheme::Quot(_) => 1,
             Grapheme::Operator(_) => 1,
             Grapheme::Delimiter(_) => 1,
             Grapheme::Space(_) => 1,
-            Grapheme::Newline(Newline::LF) => 1,
-            Grapheme::Newline(Newline::CRLF) => 2,
+            Grapheme::Newline(nl) => nl.len(),
             Grapheme::Unknown(_) => 1,
             Grapheme::Eof => 0,
         }
     }
 }
 
+#[derive(Debug)]
 pub struct Cursor {
     input: String,
     offset: usize,
@@ -132,54 +231,30 @@ impl Cursor {
     }
 
     pub fn get(&self) -> Grapheme {
+        // The guts of the parser. Smelly as hell, in the sewers it belongs.
         match self.seek_chars() {
-            [] => Grapheme::Eof,
-            [b'\r', b'\n', ..] => Grapheme::Newline(Newline::CRLF),
-            [b'\n', ..] => Grapheme::Newline(Newline::LF),
-            [head, ..] => match head {
-                &c if Cursor::is_alpha(c) => Grapheme::Alpha(Alpha(c.into())),
-                &c if Cursor::is_digit(c) => Grapheme::Digit(Digit(c.into())),
-                &c if Cursor::is_operator(c) => Grapheme::Operator(Operator(c.into())),
-                &c if Delimiter::from_byte(c).is_some() => {
-                    Grapheme::Delimiter(Delimiter::from_byte(c).unwrap())
+            &[] => Grapheme::Eof,
+            &[b'\r', b'\n', ..] => Grapheme::Newline(Newline::CRLF),
+            &[b'\n', ..] => Grapheme::Newline(Newline::LF),
+            &[c @ (b'a'..=b'z' | b'A'..=b'Z'), ..] => Grapheme::Alpha(Alpha(c.into())),
+            &[c @ (b'~' | b'&' | b'|' | b'^' | b'%' | b'*' | b'-' | b'+' | b'/' | b'\\' | b'='
+            | b':' | b'!' | b'?' | b'.' | b'<' | b'>'), ..] => {
+                Grapheme::Operator(Operator(c.into()))
+            }
+            &[c, ..] => {
+                if let Some(d) = Digit::from_byte(c) {
+                    Grapheme::Digit(d)
+                } else if let Some(d) = Delimiter::from_byte(c) {
+                    Grapheme::Delimiter(d)
+                } else if let Some(q) = Quotation::from_byte(c) {
+                    Grapheme::Quot(q)
+                } else if let Some(s) = Space::from_byte(c) {
+                    Grapheme::Space(s)
+                } else {
+                    Grapheme::Unknown(c.into())
                 }
-                &c if Cursor::is_space(c) => Grapheme::Space(Space(c.into())),
-                &c => Grapheme::Unknown(c.into()),
-            },
+            }
         }
-    }
-
-    fn is_alpha(c: u8) -> bool {
-        matches!(c, b'a'..=b'z' | b'A'..=b'Z')
-    }
-
-    fn is_digit(c: u8) -> bool {
-        matches!(c, b'0'..=b'9')
-    }
-
-    fn is_operator(c: u8) -> bool {
-        false
-            || c == b'~'
-            || c == b'&'
-            || c == b'|'
-            || c == b'^'
-            || c == b'%'
-            || c == b'*'
-            || c == b'-'
-            || c == b'+'
-            || c == b'/'
-            || c == b'\\'
-            || c == b'='
-            || c == b':'
-            || c == b'!'
-            || c == b'?'
-            || c == b'.'
-            || c == b'<'
-            || c == b'>'
-    }
-
-    fn is_space(c: u8) -> bool {
-        matches!(c, b' ' | b'\t')
     }
 }
 
@@ -187,12 +262,12 @@ impl Iterator for Cursor {
     type Item = Grapheme;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let grapheme = self.get();
-        self.offset += grapheme.len();
-
-        match grapheme {
+        match self.get() {
             Grapheme::Eof => None,
-            c => Some(c),
+            c => {
+                self.offset += c.len();
+                Some(c)
+            }
         }
     }
 }
@@ -221,10 +296,23 @@ mod tests {
 
     #[test]
     fn get_digit() {
-        for c in '0'..='9' {
+        let digits = vec![
+            ('0', Digit::Zero),
+            ('1', Digit::One),
+            ('2', Digit::Two),
+            ('3', Digit::Three),
+            ('4', Digit::Four),
+            ('5', Digit::Five),
+            ('6', Digit::Six),
+            ('7', Digit::Seven),
+            ('8', Digit::Eight),
+            ('9', Digit::Nine),
+        ];
+
+        for (c, d) in digits {
             let str = c;
             let cursor = Cursor::new(str);
-            assert_eq!(cursor.get(), Grapheme::Digit(Digit(c)));
+            assert_eq!(cursor.get(), Grapheme::Digit(d));
         }
     }
 
@@ -241,8 +329,8 @@ mod tests {
         assert_eq!(cursor.next(), Some(Grapheme::Alpha(Alpha('b'))));
         assert_eq!(cursor.next(), Some(Grapheme::Alpha(Alpha('A'))));
         assert_eq!(cursor.next(), Some(Grapheme::Alpha(Alpha('B'))));
-        assert_eq!(cursor.next(), Some(Grapheme::Digit(Digit('1'))));
-        assert_eq!(cursor.next(), Some(Grapheme::Digit(Digit('2'))));
+        assert_eq!(cursor.next(), Some(Grapheme::Digit(Digit::One)));
+        assert_eq!(cursor.next(), Some(Grapheme::Digit(Digit::Two)));
         assert_eq!(cursor.next(), None);
         assert_eq!(cursor.next(), None);
     }

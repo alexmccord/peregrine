@@ -1,12 +1,17 @@
 use crate::ast::expr::Expr;
+use crate::ast::TokenSpan;
+
+use crate::syn::lexer::TokenId;
+
 use crate::idx;
 
-pub type DeclId = idx::Id<Decl>;
+idx::newindex!(pub DeclId);
 
 #[derive(Debug)]
 pub struct Decl {
     id: DeclId,
     kind: DeclKind,
+    token_span: TokenSpan,
 }
 
 #[derive(Debug)]
@@ -154,8 +159,12 @@ pub enum Let {
 }
 
 impl Decl {
-    pub fn new(id: DeclId, kind: DeclKind) -> Decl {
-        Decl { id, kind }
+    pub fn new(id: DeclId, kind: DeclKind, token_span: TokenSpan) -> Decl {
+        Decl {
+            id,
+            kind,
+            token_span,
+        }
     }
 
     pub fn id(&self) -> DeclId {
@@ -164,6 +173,18 @@ impl Decl {
 
     pub fn kind(&self) -> &DeclKind {
         &self.kind
+    }
+
+    pub fn token_span(&self) -> TokenSpan {
+        self.token_span.clone()
+    }
+
+    pub fn begin_token(&self) -> TokenId {
+        self.token_span.begin
+    }
+
+    pub fn end_token(&self) -> TokenId {
+        self.token_span.end
     }
 
     pub fn as_module(&self) -> Option<&Module> {
