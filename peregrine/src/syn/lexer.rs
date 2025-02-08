@@ -247,6 +247,21 @@ impl Lexer {
         self.current_pos
     }
 
+    fn advance_cursor(&mut self) -> bool {
+        match self.cursor.next() {
+            Some(Grapheme::Newline(..)) => {
+                self.current_pos = Position::new(self.current_pos.line() + 1, 0);
+                true
+            }
+            Some(c) => {
+                let (line, col) = (self.current_pos.line(), self.current_pos.column() + c.len());
+                self.current_pos = Position::new(line, col);
+                true
+            }
+            None => false,
+        }
+    }
+
     fn scan(&mut self, f: impl Fn(Grapheme) -> ScanResult) -> Result<String, TokenKind> {
         self.scan_with((), |(), g| ((), f(g)))
     }
@@ -260,9 +275,9 @@ impl Lexer {
         let mut ok = true;
 
         // We call `self.advance_cursor()` here and now without the loop because
-        // `self.next()` already checked what grapheme we have so we can
-        // skip that redundant computation. But we have to do this after we get
-        // our `i`, otherwise slicing will be off by one byte at the start.
+        // `self.next()` already checked what grapheme we have so we can skip that
+        // redundant computation. But we have to do this after we get our `i`,
+        // otherwise slicing will be off by one byte at the start.
         self.advance_cursor();
 
         loop {
@@ -389,21 +404,6 @@ impl Lexer {
         });
 
         map_tok(res, |str| TokenKind::Operator(str))
-    }
-
-    fn advance_cursor(&mut self) -> bool {
-        match self.cursor.next() {
-            Some(Grapheme::Newline(..)) => {
-                self.current_pos = Position::new(self.current_pos.line() + 1, 0);
-                true
-            }
-            Some(c) => {
-                let (line, col) = (self.current_pos.line(), self.current_pos.column() + c.len());
-                self.current_pos = Position::new(line, col);
-                true
-            }
-            None => false,
-        }
     }
 }
 
