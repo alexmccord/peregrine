@@ -238,7 +238,38 @@ impl Parser {
     fn parse_module_tail(&mut self, module_tok: TokenId) -> Decl {
         let (ok, path, last_tok) = self.parse_path();
 
-        // TODO: still need to get rid of this
+        // TODO: `where` keyword here? e.g. we _might_ have two kinds of `module` declarations.
+        // But I'm halfminded here, the filesystem already implies `module List`. Not sure yet.
+        //
+        // I'm leaving this as is for now. I need to finish the design of the module system and
+        // the build system in order to make sense of it all.
+        //
+        // #1: top-level `module` declaration:
+        //
+        //  module List
+        //
+        //  export data List a =
+        //    | Nil
+        //    | Cons a (List a)
+        //
+        //  let length : List a -> Natural
+        //  let length =
+        //    function
+        //    | Nil -> 0
+        //    | Cons _ xs -> 1 + length xs
+        //
+        // #2: non-toplevel `module` declaration:
+        //
+        //  module List where
+        //    export data List a
+        //      | Nil
+        //      | Cons a (List a)
+        //
+        //    let length : List a -> Natural
+        //    let length =
+        //      function
+        //      | Nil -> 0
+        //      | Cons _ xs -> 1 + length xs
         let decls = self.parse_decls();
 
         let decl = self.make_decl(
