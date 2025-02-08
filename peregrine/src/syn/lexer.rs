@@ -345,7 +345,6 @@ impl Lexer {
     fn scan_bytestring(&mut self, quot: Quotation) -> TokenKind {
         #[derive(Debug, PartialEq, Eq, Clone, Copy)]
         enum State {
-            Start,
             Escaped,
             Next,
             Finished,
@@ -353,7 +352,7 @@ impl Lexer {
 
         use State::*;
 
-        let res = self.scan_with(Start, |s, g| match (s, g) {
+        let res = self.scan_with(Next, |s, g| match (s, g) {
             (Finished, _) => (Finished, ScanResult::Ok(Terminate)),
             (_, Grapheme::Alpha(_)) => (Next, ScanResult::Ok(Append)),
             (_, Grapheme::Digit(_)) => (Next, ScanResult::Ok(Append)),
@@ -552,6 +551,14 @@ mod tests {
         assert_eq!(lexer[tok2].kind(), &TokenKind::ByteString(str2));
         assert_eq!(lexer[tok2].begin(), Position::new(1, 6));
         assert_eq!(lexer[tok2].end(), Position::new(1, 13));
+    }
+
+    #[test]
+    fn scan_empty_string() {
+        let mut lexer = Lexer::new(r#""""#);
+        let tok = lexer.next().unwrap();
+        let str = ByteString::new_bytestring(r#""""#, lexer[tok].end());
+        assert_eq!(lexer[tok].kind(), &TokenKind::ByteString(str))
     }
 
     #[test]
