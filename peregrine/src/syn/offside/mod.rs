@@ -608,7 +608,7 @@ impl<T: PartialOffsideOrd> PartialOffsideOrd for Option<T> {
     fn partial_cmp_offside(&self, other: &Self) -> Option<Indentation> {
         match (self, other) {
             (Some(lhs), Some(rhs)) => lhs.partial_cmp_offside(rhs),
-            (_, _) => None,
+            (_, _) => None, // The reason for this entire trait!
         }
     }
 }
