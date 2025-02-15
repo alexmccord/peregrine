@@ -314,7 +314,7 @@ enum AbsoluteOffside {
     One([Relative; 1]),
     Two([Relative; 2]),
     // If we have one more `Relative` in this state, we switch to Heap because
-    // `sizeof(Relative) * 4 > Vec<Relative>`.
+    // `sizeof(Relative) * 4 > sizeof(Vec<Relative>)`.
     Three([Relative; 3]),
     Heap(Vec<Relative>),
 }
@@ -327,13 +327,13 @@ pub enum Indentation {
 }
 
 /// Why not [`PartialOrd`]? Because [`Option<T>`] where `T: PartialOrd` returns
-/// true.
+/// true, but that's wrong for the problem domain in this case!
 /// ```
 /// let x = None;
 /// let y = Some(5);
 ///
-/// assert_eq!(x < y, true);  // Bad! Should be false!
-/// assert_eq!(x > y, false); // Good!
+/// assert_eq!(x < y, true);  // Bad! We want false!
+/// assert_eq!(x > y, false); // Good! ... or is it?
 /// ```
 /// This isn't what we want if we replace `5` with an [`Absolute`], because
 /// [`None`] means something different: a line with no possible way to compute
