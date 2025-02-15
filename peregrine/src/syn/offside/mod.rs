@@ -555,27 +555,27 @@ impl Absolute {
 }
 
 impl Indentation {
-    pub fn then(&self, other: &Indentation) -> Indentation {
-        match (self, other) {
-            (Self::Dedented, _) | (Self::Aligned, Self::Dedented) => *other,
-            _ => *self,
+    pub fn then(self, other: Indentation) -> Indentation {
+        match self {
+            Indentation::Aligned => other,
+            _ => self,
         }
     }
 
     pub fn then_with<F: FnOnce() -> Indentation>(self, f: F) -> Indentation {
-        self.then(&f())
+        self.then(f())
     }
 }
 
 impl PartialOffsideOrd for Indentation {
     fn partial_cmp_offside(&self, other: &Self) -> Option<Indentation> {
-        Some(self.then(other))
+        Some(self.then(*other))
     }
 }
 
 impl OffsideOrd for Indentation {
     fn cmp_offside(&self, other: &Self) -> Indentation {
-        self.then(other)
+        self.then(*other)
     }
 }
 
