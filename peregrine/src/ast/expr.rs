@@ -2,8 +2,7 @@ use crate::ast::TokenSpan;
 
 use crate::idx;
 
-use crate::syn::lexer::ByteString;
-use crate::syn::lexer::TokenId;
+use crate::syn::lexer::tok::{ByteString, TokenId};
 
 idx::newindex!(pub ExprId);
 
@@ -84,7 +83,10 @@ pub enum Let {
 pub struct Do(pub Vec<Stmt>);
 
 #[derive(Debug)]
-pub struct Stmt(pub Box<Expr>);
+pub enum Stmt {
+    Expr(Box<Expr>),
+    Bind(Box<Expr>, Box<Expr>),
+}
 
 #[derive(Debug)]
 pub struct IfThenElse {
@@ -277,7 +279,7 @@ impl ExprKind {
         ExprKind::Let(Let::the_expr_be_in(e1, e2, e3))
     }
 
-    pub fn do_notation(stmts: Vec<Stmt>) -> ExprKind {
+    pub fn do_block(stmts: Vec<Stmt>) -> ExprKind {
         ExprKind::Do(Do::new(stmts))
     }
 
@@ -412,8 +414,8 @@ impl Do {
 }
 
 impl Stmt {
-    pub fn new(expr: Expr) -> Stmt {
-        Stmt(Box::new(expr))
+    pub fn expr(expr: Expr) -> Stmt {
+        Stmt::Expr(Box::new(expr))
     }
 }
 

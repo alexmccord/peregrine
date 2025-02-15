@@ -3,11 +3,8 @@ use std::{fmt, hash};
 mod indexed_vec;
 mod macros;
 
-#[cfg(test)]
-mod tests;
-
+pub use crate::idx::indexed_vec::IndexedVec;
 pub use crate::newindex;
-pub use indexed_vec::IndexedVec;
 
 pub trait Idx: fmt::Debug + fmt::Display + Copy + Eq + hash::Hash {
     fn new(index: usize) -> Self;

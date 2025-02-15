@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 use std::ops;
 
-use super::Idx;
+use crate::idx::Idx;
 
 #[derive(Debug, Clone)]
 pub struct IndexedVec<I, T> {
@@ -13,6 +13,13 @@ impl<I: Idx, T> IndexedVec<I, T> {
     pub fn new() -> IndexedVec<I, T> {
         IndexedVec {
             inner: Vec::new(),
+            marker: PhantomData,
+        }
+    }
+
+    pub fn with_capacity(capacity: usize) -> IndexedVec<I, T> {
+        IndexedVec {
+            inner: Vec::with_capacity(capacity),
             marker: PhantomData,
         }
     }
@@ -38,6 +45,10 @@ impl<I: Idx, T> IndexedVec<I, T> {
 
     pub fn get_mut(&mut self, id: I) -> Option<&mut T> {
         self.inner.get_mut(id.index())
+    }
+
+    pub fn next(id: I) -> I {
+        I::new(id.index() + 1)
     }
 
     pub fn len(&self) -> usize {

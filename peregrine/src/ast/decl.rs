@@ -1,9 +1,9 @@
+use crate::idx;
+
 use crate::ast::expr::Expr;
 use crate::ast::TokenSpan;
 
-use crate::syn::lexer::TokenId;
-
-use crate::idx;
+use crate::syn::lexer::tok::TokenId;
 
 idx::newindex!(pub DeclId);
 

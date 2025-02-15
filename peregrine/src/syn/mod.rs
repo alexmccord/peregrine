@@ -1,9 +1,9 @@
 pub mod cursor;
 pub mod lexer;
+pub mod offside;
 pub mod parser;
 
-use cursor::Delimiter;
-use lexer::TokenVec;
+use lexer::tok::{Group, TokenVec};
 use parser::Parser;
 
 use crate::ast::expr::ExprId;
@@ -33,7 +33,7 @@ impl SourceModule {
 
     pub fn source_span<'a>(&self, node: impl Into<Node<'a>>) -> SourceSpan {
         let TokenSpan { begin, end } = self.token_span(node);
-        SourceSpan::new(self.tokens[begin].begin(), self.tokens[end].end())
+        SourceSpan::new(self.tokens.get_pos(begin).0, self.tokens.get_pos(end).0)
     }
 }
 
@@ -54,13 +54,15 @@ impl ParseResult {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SyntaxError {
-    NotBalanced(Delimiter),
+    NotBalanced(Group),
     MissingName,
     MissingExpr,
     MissingDecl,
     LetDeclCannotHaveIn(Option<ExprId>),
     LetDeclIsLikelyMissingAnEquation,
     LetExprIsRequiredToHaveEquations,
+    DoIsEmpty,
+    LastStmtInDoMustBeExpr,
     IfExpr {
         missing_if_kw: bool,
         missing_then_kw: bool,

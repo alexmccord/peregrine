@@ -1,13 +1,14 @@
+use crate::idx;
+
 use crate::ast::decl::{Decl, DeclId, DeclKind};
 use crate::ast::expr::{Expr, ExprId, ExprKind, Stmt};
 use crate::ast::node::NodeId;
 use crate::ast::{Ast, TokenSpan};
-
-use crate::syn::cursor::{Delimiter, Gate};
-use crate::syn::lexer::{ByteString, Keyword, Lexer, Token, TokenId, TokenKind};
+use crate::syn::lexer::tok::*;
+use crate::syn::lexer::Lexer;
 use crate::syn::{ParseResult, SourceModule, SyntaxError};
 
-use crate::idx;
+mod tests;
 
 pub(crate) struct Parser {
     lexer: Lexer,
@@ -21,13 +22,26 @@ enum Precedence {
     TyAnn, // e : T
     App,   // f e
     Assoc, // (e)
+    Atom,  // all terminals
+}
+
+// Simple state wrt whether to skip whitespace when advancing the lexer.
+//
+// Most of the grammar doesn't care about whitespace, but some does, ignoring
+// the obvious like layouts.
+enum Significant {
+    Yes,
+    No,
 }
 
 impl Parser {
     fn new(input: impl Into<String>) -> Parser {
+        let mut lexer = Lexer::new(input);
+        let lookahead = lexer.next();
+
         Parser {
-            lexer: Lexer::new(input),
-            lookahead: None,
+            lexer,
+            lookahead,
             errors: Vec::new(),
             exprs: idx::Generation::new(),
             decls: idx::Generation::new(),
@@ -39,7 +53,7 @@ impl Parser {
         let decls = parser.parse_decls();
 
         // Sanity: if we're done parsing, we should have no more tokens.
-        assert!(parser.next().is_none());
+        assert!(parser.next_tok().is_none());
 
         ParseResult {
             source_module: SourceModule::new(Ast::new(decls), parser.lexer.into()),
@@ -47,55 +61,71 @@ impl Parser {
         }
     }
 
-    fn next(&mut self) -> Option<TokenId> {
-        // TODO: This function will skip comments and other random trivias.
-        // Trivias are things that has to be emitted, but are otherwise
-        // not significant with respect to the parser. Since Peregrine is
-        // whitespace sensitive, indent/dedent/newlines are significant,
-        // and thus are not trivias.
-        if let Some(tok) = self.lookahead.take() {
-            return Some(tok);
-        }
+    fn skip_ws_if(&mut self, significance: Significant) -> Option<TokenId> {
+        let tok = match significance {
+            Insignificant => loop {
+                let tok = self.lexer.next();
 
-        self.lexer.next()
+                break match tok {
+                    Some(tok) => match self.lexer[tok] {
+                        TokenKind::Ws(_) => continue,
+                        _ => Some(tok),
+                    },
+                    None => tok,
+                };
+            },
+            Significant => self.lexer.next(),
+        };
+
+        match tok {
+            Some(tok) => self.lookahead.replace(tok),
+            None => self.lookahead.take(),
+        }
+    }
+
+    fn next_tok(&mut self) -> Option<TokenId> {
+        self.skip_ws_if(Significant::Yes)
+    }
+
+    fn next_tok_no_ws(&mut self) -> Option<TokenId> {
+        self.skip_ws_if(Significant::No)
+    }
+
+    fn try_consume_with<F>(&mut self, ws: Significant, f: F) -> Option<TokenId>
+    where
+        F: FnOnce(&TokenKind) -> bool,
+    {
+        todo!()
     }
 
     fn try_consume<F>(&mut self, f: F) -> Option<TokenId>
     where
-        F: FnOnce(&Token) -> bool,
+        F: FnOnce(&TokenKind) -> bool,
     {
-        if self.lookahead.is_none() {
-            self.lookahead = self.next();
-        }
-
-        let Some(tok) = self.lookahead else {
-            return None;
-        };
-
-        if f(&self.lexer[tok]) {
-            self.lookahead.take()
+        if f(&self.lexer[self.lookahead?]) {
+            self.next_tok()
         } else {
             None
         }
     }
 
     fn try_parse_kw(&mut self, kw: Keyword) -> Option<TokenId> {
-        self.try_consume(|tok| match tok.kind() {
+        self.try_consume(|tok| match tok {
             TokenKind::Kw(kw2) => &kw == kw2,
             _ => false,
         })
     }
 
     fn try_parse_operator(&mut self, str: impl AsRef<str>) -> Option<TokenId> {
-        self.try_consume(|tok| match tok.kind() {
+        self.try_consume(|tok| match tok {
             TokenKind::Operator(op) => op == str.as_ref(),
             _ => false,
         })
     }
 
-    fn try_parse_delimiter(&mut self, delim: Delimiter) -> Option<TokenId> {
-        self.try_consume(|tok| match tok.kind() {
-            TokenKind::Delimiter(d) => d == &delim,
+    fn try_parse_group(&mut self, group: Group) -> Option<TokenId> {
+        self.try_consume(|tok| match tok {
+            TokenKind::Group(g) => g == &group,
             _ => false,
         })
     }
@@ -155,12 +185,12 @@ impl Parser {
     }
 
     fn parse_decl(&mut self) -> Option<Decl> {
-        let tok = self.next()?;
+        let tok = self.next_tok()?;
         self.parse_decl_tail(tok)
     }
 
     fn parse_decl_tail(&mut self, tok: TokenId) -> Option<Decl> {
-        match self.lexer[tok].kind() {
+        match self.lexer[tok] {
             TokenKind::Unknown(_) => todo!(),
             TokenKind::Kw(Keyword::Module) => Some(self.parse_module_tail(tok)),
             TokenKind::Kw(Keyword::Import) => Some(self.parse_import_tail(tok)),
@@ -190,8 +220,11 @@ impl Parser {
             TokenKind::Numeral(_) => None,
             TokenKind::ByteString(_) => None,
             TokenKind::Operator(_) => None,
-            TokenKind::Delimiter(Delimiter::Paren(Gate::Opened)) => todo!(),
-            TokenKind::Delimiter(_) => todo!(), // TODO: no other delimiters are valid here.
+            TokenKind::Group(_) => todo!(),
+            TokenKind::Ws(_) => todo!(),
+            TokenKind::Semicolon => todo!(),
+            TokenKind::Comma => todo!(),
+            TokenKind::Eof => todo!(),
         }
     }
 
@@ -211,14 +244,14 @@ impl Parser {
         let mut last_tok = None;
 
         loop {
-            let Some(id) = self.next() else {
+            let Some(id) = self.next_tok() else {
                 ok = false;
                 break;
             };
 
             last_tok = Some(id);
 
-            if let TokenKind::Ident(ident) = &self.lexer[id].kind() {
+            if let TokenKind::Ident(ident) = &self.lexer[id] {
                 path.push(ident.clone());
 
                 let dot_tok = self.try_parse_operator(".");
@@ -428,49 +461,81 @@ impl Parser {
         )
     }
 
-    // TODO: Stop using Option<Expr> here and rely on layout rules
+    // When to use `self.parse_expr` or `self.parse_expr_by_tok`?
+    //
+    // That depends on the current parser state:
+    //   1. Do you have a token that represents the current token? Use `parse_expr_by_tok`.
+    //      This could be because you're doing something that needs to match on `tok` at
+    //      multiple levels of recursion, without advancing the lexer and the cursor.
+    //   2. Otherwise, if you don't have the current token, just call `self.parse_expr`.
+    //      This one will obtain the current token and then forward that anyway.
     fn parse_expr(&mut self, pred: Precedence) -> Option<Expr> {
+        self.parse_expr_by_tok(pred, self.lookahead?)
+    }
+
+    fn parse_expr_by_tok(&mut self, pred: Precedence, tok: TokenId) -> Option<Expr> {
         match pred {
-            Precedence::TyAnn => self.parse_ty_expr(),
-            Precedence::App => self.parse_app_expr(),
-            Precedence::Assoc => self.parse_assoc_expr(),
+            Precedence::TyAnn => self.parse_ty_expr_by_tok(tok),
+            Precedence::App => self.parse_app_expr_by_tok(tok),
+            Precedence::Assoc => self.parse_assoc_expr_by_tok(tok),
+            Precedence::Atom => self.parse_atom_expr_by_tok(tok),
         }
     }
 
-    fn parse_ty_expr(&mut self) -> Option<Expr> {
-        let expr = self.parse_expr(Precedence::App)?;
+    fn parse_ty_expr_by_tok(&mut self, tok: TokenId) -> Option<Expr> {
+        let expr = self.parse_expr_by_tok(Precedence::App, tok)?;
 
-        Some(self.parse_ty_expr_tail(expr))
-    }
-
-    fn parse_ty_expr_tail(&mut self, expr: Expr) -> Expr {
         let Some(colon_tok) = self.try_parse_operator(":") else {
-            return expr;
+            return Some(expr);
         };
 
-        // Beautiful, beautiful Curry-Howard correspondence.
-        // No need for a whole separate language for types. :)
-        let ty = self.parse_expr(Precedence::App);
+        // Beautiful, beautiful Curry-Howard correspondence. No need for a whole
+        // separate language for types. :)
+        //
+        // In practice though, we would obviously add in constraints, e.g. it
+        // makes no sense to want `function` or `match` or `do` expressions in
+        // the type level, but that's a semantic analysis problem because we
+        // already have that problem in some cases anyway, consider the
+        // following:
+        //
+        //   f : (x : Nat) -> (y : Nat) -> x = y
+        //   f x x = Refl
+        //
+        // and also consider:
+        //
+        //   G : Type
+        //   G = (x : Nat) -> (y : Nat) -> x = y
+        //
+        // Similarly, we also have a bit of the same problem even in the value
+        // language:
+        //
+        //   id : a -> a
+        //   id = forall x. x
+        //
+        // Also consider this one too. We'd like to make sure you're supposed to
+        // have written the following:
+        //
+        //   id : a -> a
+        //   id = \x -> x
+        //
+        // Or equivalently:
+        //
+        //   id : a -> a
+        //   id x = x
+        //
+        // So we have quite a bit of work ahead of us, because either you have
+        // an associative expression that does type ascription, or you have a Pi
+        // type that introduces an `x` of type `Nat`.
+        let ty = self.parse_expr(Precedence::App).unwrap_or_else(|| {
+            self.report_expr_error(SyntaxError::MissingExpr, colon_tok, colon_tok)
+        });
 
-        let first_tok = expr.begin_token();
-
-        match ty {
-            Some(ty) => {
-                let last_tok = ty.end_token();
-                self.make_expr(ExprKind::ann(expr, ty), first_tok, last_tok)
-            }
-            None => {
-                let ty = self.report_expr_error(SyntaxError::MissingExpr, colon_tok, colon_tok);
-                let last_tok = ty.end_token();
-                self.make_expr(ExprKind::ann(expr, ty), first_tok, last_tok)
-            }
-        }
+        let last_tok = ty.end_token();
+        Some(self.make_expr(ExprKind::ann(expr, ty), tok, last_tok))
     }
 
-    fn parse_app_expr(&mut self) -> Option<Expr> {
-        let tok = self.next()?;
-
-        match self.lexer[tok].kind() {
+    fn parse_app_expr_by_tok(&mut self, tok: TokenId) -> Option<Expr> {
+        match &self.lexer[tok] {
             TokenKind::Unknown(_) => todo!(),
             TokenKind::Kw(Keyword::Module) => None,
             TokenKind::Kw(Keyword::Import) => todo!(), // TODO: support, scoped imports are nice.
@@ -500,16 +565,18 @@ impl Parser {
             TokenKind::Numeral(num) => Some(self.parse_numeral_tail(tok, num.clone())),
             TokenKind::ByteString(s) => Some(self.parse_string_tail(tok, s.clone())),
             TokenKind::Operator(_) => todo!(),
-            TokenKind::Delimiter(Delimiter::Paren(Gate::Opened)) => {
-                Some(self.parse_assoc_expr_tail(tok))
+            TokenKind::Group(Group::Paren(Parity::Opened)) => {
+                self.parse_expr_by_tok(Precedence::Assoc, tok)
             }
-            TokenKind::Delimiter(Delimiter::Brace(Gate::Opened)) => todo!(),
-            TokenKind::Delimiter(Delimiter::Bracket(Gate::Opened)) => todo!(),
-            TokenKind::Delimiter(Delimiter::Paren(Gate::Closed)) => None,
-            TokenKind::Delimiter(Delimiter::Brace(Gate::Closed)) => None,
-            TokenKind::Delimiter(Delimiter::Bracket(Gate::Closed)) => None,
-            TokenKind::Delimiter(Delimiter::Semicolon) => todo!(), // TODO: error,
-            TokenKind::Delimiter(Delimiter::Comma) => todo!(),     // TODO: error,
+            TokenKind::Group(Group::Brace(Parity::Opened)) => todo!(),
+            TokenKind::Group(Group::Bracket(Parity::Opened)) => todo!(),
+            TokenKind::Group(Group::Paren(Parity::Closed)) => None,
+            TokenKind::Group(Group::Brace(Parity::Closed)) => None,
+            TokenKind::Group(Group::Bracket(Parity::Closed)) => None,
+            TokenKind::Ws(_) => todo!(),
+            TokenKind::Semicolon => todo!(), // TODO: error,
+            TokenKind::Comma => todo!(),     // TODO: error,
+            TokenKind::Eof => todo!(),
         }
     }
 
@@ -557,12 +624,13 @@ impl Parser {
     fn parse_do_expr_tail(&mut self, do_tok: TokenId) -> Expr {
         let mut stmts = Vec::new();
 
+        let mut last_tok = do_tok;
         while let Some(expr) = self.parse_expr(Precedence::TyAnn) {
-            stmts.push(Stmt::new(expr));
+            last_tok = expr.end_token();
+            stmts.push(Stmt::expr(expr));
         }
 
-        let last_tok = stmts.last().map(|s| s.0.end_token()).unwrap_or(do_tok);
-        self.make_expr(ExprKind::do_notation(stmts), do_tok, last_tok)
+        self.make_expr(ExprKind::do_block(stmts), do_tok, last_tok)
     }
 
     fn parse_if_expr_tail(&mut self, if_tok: TokenId) -> Expr {
@@ -617,248 +685,86 @@ impl Parser {
         self.make_expr(ExprKind::str(str), str_tok, str_tok)
     }
 
-    fn parse_assoc_expr_tail(&mut self, opened_tok: TokenId) -> Expr {
-        // Two missed opportunities to report errors.
-        let e = self.parse_expr(Precedence::Assoc);
-        let Some(closed_tok) = self.try_parse_delimiter(Delimiter::Paren(Gate::Closed)) else {
-            let err = SyntaxError::NotBalanced(Delimiter::Paren(Gate::Closed));
-            return match e {
-                Some(e) => self.make_expr_error(err, e.id(), opened_tok, e.end_token()),
-                None => self.report_expr_error(
-                    SyntaxError::NotBalanced(Delimiter::Paren(Gate::Closed)),
-                    opened_tok,
-                    opened_tok,
-                ),
-            };
-        };
-
-        match e {
-            Some(e) => self.make_expr(ExprKind::assoc(e), opened_tok, closed_tok),
-            None => self.make_expr(ExprKind::unit(), opened_tok, closed_tok),
-        }
-    }
-
-    fn parse_assoc_expr(&mut self) -> Option<Expr> {
-        let tok = self.next()?;
-
-        match self.lexer[tok].kind() {
+    fn parse_assoc_expr_by_tok(&mut self, tok: TokenId) -> Option<Expr> {
+        // I could have used a loop here, but I didn't because there's some subtlety
+        // wrt the way we track expression source spans, e.g. if we wrote the naive
+        // loop, it might be the case that the expression
+        //
+        //   (((a) b) c)
+        //
+        // will have incorrect spans, e.g. the following diagram:
+        //
+        //   (((a) b) c)
+        //   |   |  |  |
+        //   +---+  |  |
+        //   |      |  |
+        //   +------+  |
+        //   |         |
+        //   +---------+
+        //
+        // which as we can see is incorrect. What we want to see is the following diagram:
+        //
+        //   (((a) b) c)
+        //   ||| |  |  |
+        //   ||+-+  |  |
+        //   |+-----+  |
+        //   +---------+
+        //
+        // So for now, we'll just do the dumb simple thing of recursion. If it becomes a
+        // problem, I'll be motivated to fix it.
+        let tok = self.next_tok()?;
+        match self.lexer[tok] {
             TokenKind::Unknown(_) => todo!(),
             TokenKind::Kw(_) => todo!(),
             TokenKind::Ident(_) => todo!(),
             TokenKind::Numeral(_) => todo!(),
             TokenKind::ByteString(_) => todo!(),
             TokenKind::Operator(_) => todo!(),
-            TokenKind::Delimiter(_) => todo!(),
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::ast::{decl, expr, Position};
-    use crate::syn;
-
-    #[test]
-    fn parse_nothing() {
-        let result = syn::parse("");
-        assert!(result.ast().decls().is_empty());
-    }
-
-    #[test]
-    fn parse_module_decl() {
-        let result = syn::parse("module A.B.C");
-        let mut iter = result.ast().decls().iter();
-
-        let module_decl = iter.next().unwrap();
-        let module = module_decl.as_module().unwrap();
-        let path = vec!["A".to_string(), "B".to_string(), "C".to_string()];
-        assert_eq!(module.path(), Some(&path));
-
-        assert!(iter.next().is_none());
-    }
-
-    #[test]
-    fn parse_import_decl() {
-        let result = syn::parse("import A.B.C");
-        let source_module = &result.source_module;
-        let mut iter = result.ast().decls().iter();
-
-        let import_decl = iter.next().unwrap();
-        let import = import_decl.as_import().unwrap();
-        assert_eq!(import.path(), &vec!["A", "B", "C"]);
-
-        let import_src_span = source_module.source_span(import_decl);
-        assert_eq!(import_src_span.begin, Position::new(1, 0));
-        assert_eq!(import_src_span.end, Position::new(1, 12));
-
-        assert!(iter.next().is_none());
-    }
-
-    #[test]
-    fn parse_export_decl() {
-        let source_module = syn::parse("export let five = 5").source_module;
-        let mut iter = source_module.ast.decls().iter();
-
-        let export_decl = iter.next().unwrap();
-        let export = export_decl.as_export().unwrap();
-        let let_decl = export.decl().as_let().unwrap();
-
-        match let_decl {
-            decl::Let::Decl(..) => panic!("not this one"),
-            decl::Let::DeclExpr(f, e) => {
-                let expr::Var(var) = f.as_var().unwrap();
-                assert_eq!(var, "five");
-
-                let expr::Num(num) = e.as_num().unwrap();
-                assert_eq!(num, "5");
+            TokenKind::Group(Group::Paren(Parity::Opened)) => {
+                let e = self.parse_expr(Precedence::Atom);
+                match self.next_tok() {
+                    Some(tok) => todo!(),
+                    None => todo!(),
+                }
             }
+            TokenKind::Group(Group::Brace(Parity::Opened)) => todo!(),
+            TokenKind::Group(Group::Bracket(Parity::Opened)) => todo!(),
+            TokenKind::Group(Group::Paren(Parity::Closed)) => None,
+            TokenKind::Group(Group::Brace(Parity::Closed)) => None,
+            TokenKind::Group(Group::Bracket(Parity::Closed)) => None,
+            TokenKind::Ws(_) => todo!(),
+            TokenKind::Semicolon => todo!(),
+            TokenKind::Comma => todo!(),
+            TokenKind::Eof => todo!(),
         }
     }
 
-    #[test]
-    fn parse_let_five_be_5() {
-        let source_module = syn::parse("let five = 5").source_module;
-        let mut iter = source_module.ast.decls().iter();
+    fn parse_either_unit_or_expr_tail(&mut self, open_paren_tok: TokenId) -> Expr {
+        if let Some(closed_paren_tok) = self.try_parse_group(Group::Paren(Parity::Closed)) {
+            return self.make_expr(ExprKind::unit(), open_paren_tok, closed_paren_tok);
+        }
 
-        let let_decl = iter.next().unwrap();
-        let l = let_decl.as_let().unwrap();
-
-        match l {
-            decl::Let::Decl(..) => panic!("not this one"),
-            decl::Let::DeclExpr(f, e) => {
-                let expr::Var(var) = f.as_var().unwrap();
-                assert_eq!(var, "five");
-
-                let expr::Num(num) = e.as_num().unwrap();
-                assert_eq!(num, "5");
+        let e = match self.next_tok() {
+            Some(tok) => match self.lexer[tok] {
+                TokenKind::Group(Group::Paren(Parity::Closed)) => None,
+                _ => self.parse_expr_by_tok(Precedence::TyAnn, tok),
+            },
+            None => {
+                return self.report_expr_error(
+                    SyntaxError::NotBalanced(Group::Paren(Parity::Closed)),
+                    open_paren_tok,
+                    open_paren_tok,
+                );
             }
+        };
+
+        match e {
+            Some(_) => todo!(),
+            None => todo!(),
         }
     }
 
-    #[test]
-    fn parse_let_paren_x_paren_be_2() {
-        let source_module = syn::parse("let (x) = 2").source_module;
-        let mut iter = source_module.ast.decls().iter();
-
-        let let_decl = iter.next().unwrap();
-        let l = let_decl.as_let().unwrap();
-
-        match l {
-            decl::Let::Decl(..) => panic!("not this one"),
-            decl::Let::DeclExpr(f, e) => {
-                let expr::Var(var) = f.as_var().unwrap();
-                assert_eq!(var, "x");
-
-                let expr::Num(num) = e.as_num().unwrap();
-                assert_eq!(num, "2");
-            }
-        }
+    fn parse_atom_expr_by_tok(&mut self, tok: TokenId) -> Option<Expr> {
+        todo!()
     }
-
-    #[test]
-    fn parse_let_id_which_is_a_to_a() {
-        let source_module = syn::parse("let id : a -> a").source_module;
-        let mut iter = source_module.ast.decls().iter();
-
-        let let_decl = iter.next().unwrap();
-        let l = let_decl.as_let().unwrap();
-
-        match l {
-            decl::Let::DeclExpr(..) => panic!("not this one"),
-            decl::Let::Decl(f) => {
-                let expr::Ann(e, t) = f.as_ann().unwrap();
-                let expr::Var(var) = e.as_var().unwrap();
-                assert_eq!(var, "id");
-
-                let app_2 = t.as_app().unwrap();
-                let expr::Var(arg_a_2) = app_2.argument().as_var().unwrap();
-                assert_eq!(arg_a_2, "a");
-
-                let app_1 = app_2.function().as_app().unwrap();
-                let expr::Var(arg_a_1) = app_1.argument().as_var().unwrap();
-                assert_eq!(arg_a_1, "a");
-
-                let expr::Var(var_arrow) = app_1.function().as_var().unwrap();
-                assert_eq!(var_arrow, "->");
-            }
-        }
-    }
-
-    #[test]
-    fn parse_let_id_x_be_x() {
-        let source_module = syn::parse("let id x = x").source_module;
-        let mut iter = source_module.ast.decls().iter();
-
-        let let_decl = iter.next().unwrap();
-        let l = let_decl.as_let().unwrap();
-
-        match l {
-            decl::Let::Decl(..) => panic!("not this one"),
-            decl::Let::DeclExpr(f_id, e_id) => {
-                let expr::App(f, e) = f_id.as_app().unwrap();
-                let expr::Var(id) = f.as_var().unwrap();
-                let expr::Var(x) = e_id.as_var().unwrap();
-                assert_eq!(id, "id");
-                assert_eq!(x, "x");
-
-                let expr::Var(x) = e.as_var().unwrap();
-                assert_eq!(x, "2");
-            }
-        }
-    }
-
-    #[test]
-    fn parse_let_five_of_missing_type() {
-        let result = syn::parse("let five :");
-        let source_module = result.source_module;
-        let errors = result.errors;
-
-        let mut decls = source_module.ast.decls().iter();
-
-        let let_decl = decls.next().unwrap();
-        let l = let_decl.as_let().unwrap();
-
-        match l {
-            decl::Let::DeclExpr(..) => panic!("not this one"),
-            decl::Let::Decl(f) => {
-                let expr::Ann(e, t) = f.as_ann().unwrap();
-                let expr::Var(five) = e.as_var().unwrap();
-                assert_eq!(five, "five");
-                assert_eq!(t.as_error().unwrap(), None);
-
-                let error = errors
-                    .iter()
-                    .find_map(|(id, e)| (id == &t.id()).then_some(e))
-                    .unwrap();
-
-                assert_eq!(error, &syn::SyntaxError::MissingExpr);
-            }
-        }
-    }
-
-    #[test]
-    fn parse_unit() {
-        let source_module = syn::parse("let unit = ()").source_module;
-        let mut decls = source_module.ast.decls().iter();
-
-        let let_decl = decls.next().unwrap();
-        let l = let_decl.as_let().unwrap();
-
-        match l {
-            decl::Let::Decl(_) => panic!("not this one"),
-            decl::Let::DeclExpr(_, e) => assert!(e.is_unit()),
-        }
-    }
-
-    // #[test]
-    // fn parsing_preserves_spans() {
-    //     let result = parse("let five = 5");
-    //     let mut decls = result.decls();
-
-    //     let let_decl_id = decls.next().unwrap();
-    //     let let_decl_span = result.get_decl_span(*let_decl_id);
-
-    //     assert_eq!(let_decl_span.begin, Position::new(1, 0));
-    //     assert_eq!(let_decl_span.end, Position::new(1, 12));
-    // }
 }
