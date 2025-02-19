@@ -22,6 +22,7 @@ impl Level {
 pub enum Universe {
     Uni(Level), // proof relevant
     Omega,      // proof irrelevant
+    Effect,     // dependent effects for free
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -29,11 +30,7 @@ pub struct Var(u64);
 
 #[derive(Debug)]
 pub struct Context {
-    // TODO: This is probably wrong, it only allows us to map
-    // from variables to terms, but perhaps terms can map to
-    // terms also? e.g. `x : A` is a term that's bound to `s`,
-    // hence the notation `x : A : s`.
-    bindings: HashMap<Var, TermId>,
+    bindings: HashMap<TermId, TermId>,
 }
 
 impl Context {
@@ -43,12 +40,12 @@ impl Context {
         }
     }
 
-    fn insert(&mut self, var: Var, t: TermId) {
-        self.bindings.insert(var, t);
+    fn insert(&mut self, v: TermId, t: TermId) {
+        self.bindings.insert(v, t);
     }
 
-    fn lookup(&self, var: &Var) -> Option<&TermId> {
-        self.bindings.get(var)
+    fn lookup(&self, v: TermId) -> Option<TermId> {
+        self.bindings.get(&v).cloned()
     }
 }
 
@@ -105,10 +102,13 @@ pub enum TermKind {
     Transp(TermId, TermId, TermId, TermId, TermId, TermId),
     // cast(A, B, e, t)
     Cast(TermId, TermId, TermId, TermId),
-    //
+    /// First projection (domain) of equality between two dependent function types
     Pi1,
+    /// Second projection (codomain) of equality between two dependent function types
     Pi2,
+    /// Omega universe extensionality: if two propositions implies each other.
     OmegaExt,
+    /// Function extensionality: forall x in `f`, if `g x = f x` then `g = f`.
     PiExt,
 }
 
@@ -120,7 +120,7 @@ pub enum TypingError {
 pub fn check(ctx: &Context, term: &Term) -> Result<(), TypingError> {
     match term.kind() {
         TermKind::Var(var) => {
-            let res = ctx.lookup(&var).ok_or(TypingError::UnknownVar(*var))?;
+            let res = ctx.lookup(term.id()).ok_or(TypingError::UnknownVar(*var))?;
             Ok(()) // TODO: Conv typing rule
         }
         TermKind::Sort(sort) => todo!(),
@@ -149,13 +149,12 @@ mod tests {
         let mut terms = TermVec::new();
         let mut ctx = Context::new();
 
+        let x_term = terms.allocate(|id| Term::new(id, TermKind::Var(Var(0))));
+
         let a = Sort(Universe::Uni(Level(0)));
         let a_term = terms.allocate(|id| Term::new(id, TermKind::Sort(a)));
 
-        let x = Var(0);
-        let x_term = terms.allocate(|id| Term::new(id, TermKind::Var(x)));
-
-        ctx.insert(x, a_term);
+        ctx.insert(x_term, a_term);
 
         let res = check(&ctx, &terms[x_term]);
         assert_eq!(res, Ok(()));
