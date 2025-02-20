@@ -13,7 +13,7 @@ where
     let mut absolute = None;
     for su in Cursor::new(str) {
         if absolute.is_none() && f(&su) {
-            absolute = Some(offside.absolute_offside().cloned());
+            absolute = Some(offside.absolute_offside());
         }
 
         offside.push_scan_unit(su);
@@ -27,7 +27,7 @@ fn writeln_abs(offside: &mut Offside, str: &str) -> Option<Absolute> {
         offside.push_scan_unit(su);
     }
 
-    offside.absolute_offside().cloned()
+    offside.absolute_offside()
 }
 
 fn writeln(offside: &mut Offside, str: &str) -> Option<Relative> {

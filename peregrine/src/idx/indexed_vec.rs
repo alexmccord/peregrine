@@ -1,12 +1,20 @@
 use std::marker::PhantomData;
 use std::ops;
 
+use crate::idx::Generation;
 use crate::idx::Idx;
 
 #[derive(Debug, Clone)]
 pub struct IndexedVec<I, T> {
     inner: Vec<T>,
     marker: PhantomData<fn(I)>,
+}
+
+pub type Values<'a, T> = std::slice::Iter<'a, T>;
+
+pub struct Iter<'a, I, T> {
+    inner: &'a IndexedVec<I, T>,
+    gen: Generation<I>,
 }
 
 impl<I: Idx, T> IndexedVec<I, T> {
@@ -34,9 +42,7 @@ impl<I: Idx, T> IndexedVec<I, T> {
     }
 
     pub fn push(&mut self, value: T) -> I {
-        let id = I::new(self.inner.len());
-        self.inner.push(value);
-        id
+        self.allocate(|_| value)
     }
 
     pub fn get(&self, id: I) -> Option<&T> {
@@ -47,7 +53,18 @@ impl<I: Idx, T> IndexedVec<I, T> {
         self.inner.get_mut(id.index())
     }
 
-    pub fn next(id: I) -> I {
+    pub fn iter<'a>(&'a self) -> Iter<'a, I, T> {
+        Iter {
+            inner: self,
+            gen: Generation::new(),
+        }
+    }
+
+    pub fn values<'a>(&'a self) -> Values<'a, T> {
+        self.inner.iter()
+    }
+
+    pub fn next_id(id: I) -> I {
         I::new(id.index() + 1)
     }
 
@@ -76,13 +93,25 @@ impl<I: Idx, T> ops::IndexMut<I> for IndexedVec<I, T> {
     }
 }
 
-impl<I, T> IntoIterator for IndexedVec<I, T> {
-    type Item = T;
+impl<'a, I: Idx, T> Iterator for Iter<'a, I, T> {
+    type Item = (I, &'a T);
 
-    type IntoIter = std::vec::IntoIter<T>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let id = self.gen.next();
+        Some((id, self.inner.get(id)?))
+    }
+}
+
+impl<'a, I: Idx, T> IntoIterator for &'a IndexedVec<I, T> {
+    type Item = (I, &'a T);
+
+    type IntoIter = Iter<'a, I, T>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.inner.into_iter()
+        Iter {
+            inner: &self,
+            gen: Generation::new(),
+        }
     }
 }
 

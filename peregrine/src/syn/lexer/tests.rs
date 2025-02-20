@@ -1,369 +1,416 @@
 #![cfg(test)]
 use super::*;
+use crate::syn;
 
-fn skip_ws(lexer: &mut Lexer, ws: tok::Ws) {
-    let tok = lexer.next().unwrap();
-    assert_eq!(lexer[tok], tok::TokenKind::Ws(ws));
+fn assert_ws<'a, T, I: Iterator<Item = (T, &'a TokenKind)>>(iter: &mut I, ws: Ws) {
+    assert_eq!(iter.next().map(|(_, tok)| tok), Some(&TokenKind::Ws(ws)));
+}
+
+fn assert_eof<'a, T, I: Iterator<Item = (T, &'a TokenKind)>>(iter: &mut I) {
+    assert_eq!(iter.next().map(|(_, tok)| tok), Some(&TokenKind::Eof));
+    assert_eq!(iter.next().map(|(_, tok)| tok), None);
 }
 
 #[test]
 fn scan_unknown() {
-    let mut lexer = Lexer::new("@@@");
+    let tokens = syn::tokenize("@@@");
+    let mut iter = tokens
+        .iter()
+        .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
 
-    let tok1 = lexer.next().unwrap();
-    assert_eq!(lexer[tok1], tok::TokenKind::Unknown("@@@".into()));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 0), Position::new(1, 3)),
+            &TokenKind::Unknown("@@@".into()),
+        ))
+    );
 
-    let tok2 = lexer.next().unwrap();
-    assert_eq!(lexer[tok2], tok::TokenKind::Eof);
-
-    assert_eq!(lexer.next(), None);
-
-    let (begin, end) = lexer.tokens.get_pos(tok1);
-    assert_eq!(begin, Position::new(1, 0));
-    assert_eq!(end, Position::new(1, 3));
+    assert_eof(&mut iter);
 }
 
 #[test]
 fn scan_kw() {
     let kws = vec![
-        ("module", tok::Keyword::Module),
-        ("import", tok::Keyword::Import),
-        ("export", tok::Keyword::Export),
-        ("public", tok::Keyword::Public),
-        ("open", tok::Keyword::Open),
-        ("hiding", tok::Keyword::Hiding),
-        ("renaming", tok::Keyword::Renaming),
-        ("struct", tok::Keyword::Struct),
-        ("data", tok::Keyword::Data),
-        ("class", tok::Keyword::Class),
-        ("instance", tok::Keyword::Instance),
-        ("deriving", tok::Keyword::Deriving),
-        ("where", tok::Keyword::Where),
-        ("let", tok::Keyword::Let),
-        ("in", tok::Keyword::In),
-        ("do", tok::Keyword::Do),
-        ("if", tok::Keyword::If),
-        ("then", tok::Keyword::Then),
-        ("else", tok::Keyword::Else),
-        ("function", tok::Keyword::Function),
-        ("match", tok::Keyword::Match),
-        ("with", tok::Keyword::With),
-        ("forall", tok::Keyword::Forall),
-        ("exists", tok::Keyword::Exists),
+        ("module", Keyword::Module),
+        ("import", Keyword::Import),
+        ("export", Keyword::Export),
+        ("public", Keyword::Public),
+        ("open", Keyword::Open),
+        ("hiding", Keyword::Hiding),
+        ("renaming", Keyword::Renaming),
+        ("struct", Keyword::Struct),
+        ("data", Keyword::Data),
+        ("class", Keyword::Class),
+        ("instance", Keyword::Instance),
+        ("deriving", Keyword::Deriving),
+        ("where", Keyword::Where),
+        ("let", Keyword::Let),
+        ("in", Keyword::In),
+        ("do", Keyword::Do),
+        ("if", Keyword::If),
+        ("then", Keyword::Then),
+        ("else", Keyword::Else),
+        ("function", Keyword::Function),
+        ("match", Keyword::Match),
+        ("with", Keyword::With),
+        ("forall", Keyword::Forall),
+        ("exists", Keyword::Exists),
     ];
 
     for (str, kw) in kws {
-        let mut lexer = Lexer::new(str);
+        let tokens = syn::tokenize(str);
+        let mut iter = tokens
+            .iter()
+            .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
 
-        let tok = lexer.next().unwrap();
-        assert_eq!(lexer[tok], tok::TokenKind::Kw(kw));
+        assert_eq!(
+            iter.next(),
+            Some((
+                (Position::new(1, 0), Position::new(1, str.len())),
+                &TokenKind::Kw(kw),
+            ))
+        );
 
-        let tok2 = lexer.next().unwrap();
-        assert_eq!(lexer[tok2], tok::TokenKind::Eof);
-
-        assert_eq!(lexer.next(), None);
-
-        let (begin, end) = lexer.tokens.get_pos(tok);
-        assert_eq!(begin, Position::new(1, 0));
-        assert_eq!(end, Position::new(1, str.len()));
+        assert_eof(&mut iter);
     }
 }
 
 #[test]
 fn scan_ident() {
-    let mut lexer = Lexer::new("abc");
+    let tokens = syn::tokenize("abc");
+    let mut iter = tokens
+        .iter()
+        .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
 
-    let tok1 = lexer.next().unwrap();
-    assert_eq!(lexer[tok1], tok::TokenKind::Ident("abc".into()));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 0), Position::new(1, 3)),
+            &TokenKind::Ident("abc".into()),
+        ))
+    );
 
-    let tok2 = lexer.next().unwrap();
-    assert_eq!(lexer[tok2], tok::TokenKind::Eof);
-
-    assert!(lexer.next().is_none());
-
-    let (begin, end) = lexer.tokens.get_pos(tok1);
-    assert_eq!(begin, Position::new(1, 0));
-    assert_eq!(end, Position::new(1, 3));
+    assert_eof(&mut iter);
 }
 
 #[test]
 fn scan_ident_with_numerals() {
-    let mut lexer = Lexer::new("abc12");
+    let tokens = syn::tokenize("abc12");
+    let mut iter = tokens
+        .iter()
+        .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
 
-    let tok1 = lexer.next().unwrap();
-    assert_eq!(lexer[tok1], tok::TokenKind::Ident("abc12".into()));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 0), Position::new(1, 5)),
+            &TokenKind::Ident("abc12".into()),
+        ))
+    );
 
-    let tok2 = lexer.next().unwrap();
-    assert_eq!(lexer[tok2], tok::TokenKind::Eof);
-
-    assert!(lexer.next().is_none());
-
-    let (begin, end) = lexer.tokens.get_pos(tok1);
-    assert_eq!(begin, Position::new(1, 0));
-    assert_eq!(end, Position::new(1, 5));
+    assert_eof(&mut iter);
 }
 
 #[test]
 fn scan_strings() {
-    let mut lexer = Lexer::new(r#""abc" "def\"""#);
+    let tokens = syn::tokenize(r#""abc""def\"""#);
+    let mut iter = tokens
+        .iter()
+        .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
 
-    let tok1 = lexer.next().unwrap();
-    let str1 = tok::ByteString::from_quot(Quotation::Double, r#""abc""#);
-    assert_eq!(lexer[tok1], tok::TokenKind::ByteString(str1));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 0), Position::new(1, 5)),
+            &TokenKind::ByteString(ByteString::from_quot(Quotation::Double, r#""abc""#)),
+        ))
+    );
 
-    skip_ws(&mut lexer, tok::Ws::Space { count: 1 });
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 5), Position::new(1, 12)),
+            &TokenKind::ByteString(ByteString::from_quot(Quotation::Double, r#""def\"""#)),
+        ))
+    );
 
-    let tok2 = lexer.next().unwrap();
-    let str2 = tok::ByteString::from_quot(Quotation::Double, r#""def\"""#);
-    assert_eq!(lexer[tok2], tok::TokenKind::ByteString(str2));
-
-    let tok3 = lexer.next().unwrap();
-    assert_eq!(lexer[tok3], tok::TokenKind::Eof);
-
-    assert_eq!(lexer.next(), None);
-
-    let (begin1, end1) = lexer.tokens.get_pos(tok1);
-    assert_eq!(begin1, Position::new(1, 0));
-    assert_eq!(end1, Position::new(1, 5));
-
-    let (begin2, end2) = lexer.tokens.get_pos(tok2);
-    assert_eq!(begin2, Position::new(1, 6));
-    assert_eq!(end2, Position::new(1, 13));
+    assert_eof(&mut iter);
 }
 
 #[test]
 fn scan_empty_string() {
-    let mut lexer = Lexer::new(r#""""#);
-    let tok1 = lexer.next().unwrap();
-    let str = tok::ByteString::new_bytestring(r#""""#);
+    let tokens = syn::tokenize(r#""""#);
+    let mut iter = tokens
+        .iter()
+        .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
 
-    let tok2 = lexer.next().unwrap();
-    assert_eq!(lexer[tok2], tok::TokenKind::Eof);
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 0), Position::new(1, 2)),
+            &TokenKind::ByteString(ByteString::from_quot(Quotation::Double, r#""""#)),
+        ))
+    );
 
-    let (begin, end) = lexer.tokens.get_pos(tok1);
-    assert_eq!(lexer[tok1], tok::TokenKind::ByteString(str));
-    assert_eq!(begin, Position::new(1, 0));
-    assert_eq!(end, Position::new(1, 2));
+    assert_eof(&mut iter);
 }
 
 #[test]
 fn scan_erroneous_strings() {
-    let mut lexer = Lexer::new(r#""abc"#);
+    let tokens = syn::tokenize(r#""abc"#);
+    let mut iter = tokens
+        .iter()
+        .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
 
-    let tok1 = lexer.next().unwrap();
-    assert_eq!(lexer[tok1], tok::TokenKind::Unknown(r#""abc"#.into()));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 0), Position::new(1, 4)),
+            &TokenKind::Unknown(r#""abc"#.to_string()),
+        ))
+    );
 
-    let tok2 = lexer.next().unwrap();
-    assert_eq!(lexer[tok2], tok::TokenKind::Eof);
-
-    let (begin, end) = lexer.tokens.get_pos(tok1);
-    assert_eq!(begin, Position::new(1, 0));
-    assert_eq!(end, Position::new(1, 4));
+    assert_eof(&mut iter);
 }
 
 #[test]
 fn identifiers_dont_start_with_digits() {
-    let mut lexer = Lexer::new("1abc");
+    let tokens = syn::tokenize("1abc");
+    let mut iter = tokens
+        .iter()
+        .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
 
-    let tok1 = lexer.next().unwrap();
-    assert_eq!(lexer[tok1], tok::TokenKind::Unknown("1abc".into()));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 0), Position::new(1, 4)),
+            &TokenKind::Unknown("1abc".to_string()),
+        ))
+    );
 
-    let tok2 = lexer.next().unwrap();
-    assert_eq!(lexer[tok2], tok::TokenKind::Eof);
-
-    let (begin, end) = lexer.tokens.get_pos(tok1);
-    assert_eq!(begin, Position::new(1, 0));
-    assert_eq!(end, Position::new(1, 4));
-
-    assert!(lexer.next().is_none());
+    assert_eof(&mut iter);
 }
 
 #[test]
 fn multiple_tokens() {
-    let mut lexer = Lexer::new("abc 123");
+    let tokens = syn::tokenize("abc 123");
+    let mut iter = tokens
+        .iter()
+        .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
 
-    let tok1 = lexer.next().unwrap();
-    assert_eq!(lexer[tok1], tok::TokenKind::Ident("abc".into()));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 0), Position::new(1, 3)),
+            &TokenKind::Ident("abc".to_string()),
+        ))
+    );
 
-    skip_ws(&mut lexer, tok::Ws::Space { count: 1 });
+    assert_ws(&mut iter, Ws::Space { count: 1 });
 
-    let tok2 = lexer.next().unwrap();
-    assert_eq!(lexer[tok2], tok::TokenKind::Numeral("123".into()));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 4), Position::new(1, 7)),
+            &TokenKind::Numeral("123".to_string()),
+        ))
+    );
 
-    let tok3 = lexer.next().unwrap();
-    assert_eq!(lexer[tok3], tok::TokenKind::Eof);
-
-    let (begin1, end1) = lexer.tokens.get_pos(tok1);
-    assert_eq!(begin1, Position::new(1, 0));
-    assert_eq!(end1, Position::new(1, 3));
-
-    let (begin2, end2) = lexer.tokens.get_pos(tok2);
-    assert_eq!(begin2, Position::new(1, 4));
-    assert_eq!(end2, Position::new(1, 7));
+    assert_eof(&mut iter);
 }
 
 #[test]
 fn scan_operators() {
-    let mut lexer = Lexer::new(". .. .| ~ && ~()");
+    let tokens = syn::tokenize(". .. .| ~ && ~()");
+    let mut iter = tokens
+        .iter()
+        .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
 
-    let tok1 = lexer.next().unwrap();
-    assert_eq!(lexer[tok1], tok::TokenKind::Operator(".".into()));
-
-    skip_ws(&mut lexer, tok::Ws::Space { count: 1 });
-
-    let tok2 = lexer.next().unwrap();
-    assert_eq!(lexer[tok2], tok::TokenKind::Operator("..".into()));
-
-    skip_ws(&mut lexer, tok::Ws::Space { count: 1 });
-
-    let tok3 = lexer.next().unwrap();
-    assert_eq!(lexer[tok3], tok::TokenKind::Operator(".|".into()));
-
-    skip_ws(&mut lexer, tok::Ws::Space { count: 1 });
-
-    let tok4 = lexer.next().unwrap();
-    assert_eq!(lexer[tok4], tok::TokenKind::Operator("~".into()));
-
-    skip_ws(&mut lexer, tok::Ws::Space { count: 1 });
-
-    let tok5 = lexer.next().unwrap();
-    assert_eq!(lexer[tok5], tok::TokenKind::Operator("&&".into()));
-
-    skip_ws(&mut lexer, tok::Ws::Space { count: 1 });
-
-    let tok6 = lexer.next().unwrap();
-    assert_eq!(lexer[tok6], tok::TokenKind::Operator("~".into()));
-
-    let tok7 = lexer.next().unwrap();
     assert_eq!(
-        lexer[tok7],
-        tok::TokenKind::Group(tok::Group::Paren(tok::Parity::Opened))
+        iter.next(),
+        Some((
+            (Position::new(1, 0), Position::new(1, 1)),
+            &TokenKind::Operator(".".to_string()),
+        ))
     );
 
-    let tok8 = lexer.next().unwrap();
+    assert_ws(&mut iter, Ws::Space { count: 1 });
+
     assert_eq!(
-        lexer[tok8],
-        tok::TokenKind::Group(tok::Group::Paren(tok::Parity::Closed))
+        iter.next(),
+        Some((
+            (Position::new(1, 2), Position::new(1, 4)),
+            &TokenKind::Operator("..".to_string()),
+        ))
     );
 
-    let tok9 = lexer.next().unwrap();
-    assert_eq!(lexer[tok9], tok::TokenKind::Eof);
+    assert_ws(&mut iter, Ws::Space { count: 1 });
 
-    assert!(lexer.next().is_none());
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 5), Position::new(1, 7)),
+            &TokenKind::Operator(".|".to_string()),
+        ))
+    );
 
-    let (begin1, end1) = lexer.tokens.get_pos(tok1);
-    assert_eq!(begin1, Position::new(1, 0));
-    assert_eq!(end1, Position::new(1, 1));
+    assert_ws(&mut iter, Ws::Space { count: 1 });
 
-    let (begin2, end2) = lexer.tokens.get_pos(tok2);
-    assert_eq!(begin2, Position::new(1, 2));
-    assert_eq!(end2, Position::new(1, 4));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 8), Position::new(1, 9)),
+            &TokenKind::Operator("~".to_string()),
+        ))
+    );
 
-    let (begin3, end3) = lexer.tokens.get_pos(tok3);
-    assert_eq!(begin3, Position::new(1, 5));
-    assert_eq!(end3, Position::new(1, 7));
+    assert_ws(&mut iter, Ws::Space { count: 1 });
 
-    let (begin4, end4) = lexer.tokens.get_pos(tok4);
-    assert_eq!(begin4, Position::new(1, 8));
-    assert_eq!(end4, Position::new(1, 9));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 10), Position::new(1, 12)),
+            &TokenKind::Operator("&&".to_string()),
+        ))
+    );
 
-    let (begin5, end5) = lexer.tokens.get_pos(tok5);
-    assert_eq!(begin5, Position::new(1, 10));
-    assert_eq!(end5, Position::new(1, 12));
+    assert_ws(&mut iter, Ws::Space { count: 1 });
 
-    let (begin6, end6) = lexer.tokens.get_pos(tok6);
-    assert_eq!(begin6, Position::new(1, 13));
-    assert_eq!(end6, Position::new(1, 14));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 13), Position::new(1, 14)),
+            &TokenKind::Operator("~".to_string()),
+        ))
+    );
 
-    let (begin7, end7) = lexer.tokens.get_pos(tok7);
-    assert_eq!(begin7, Position::new(1, 14));
-    assert_eq!(end7, Position::new(1, 15));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 14), Position::new(1, 15)),
+            &TokenKind::Group(Group::Paren(Parity::Opened)),
+        ))
+    );
 
-    let (begin8, end8) = lexer.tokens.get_pos(tok8);
-    assert_eq!(begin8, Position::new(1, 15));
-    assert_eq!(end8, Position::new(1, 16));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 15), Position::new(1, 16)),
+            &TokenKind::Group(Group::Paren(Parity::Closed)),
+        ))
+    );
+
+    assert_eof(&mut iter);
 }
 
 #[test]
 fn scan_with_newlines() {
-    let mut lexer = Lexer::new("abc def\nghi jkl");
+    let tokens = syn::tokenize("abc def\nghi jkl");
+    let mut iter = tokens
+        .iter()
+        .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
 
-    let tok1 = lexer.next().unwrap();
-    assert_eq!(lexer[tok1], tok::TokenKind::Ident("abc".into()));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 0), Position::new(1, 3)),
+            &TokenKind::Ident("abc".to_string()),
+        ))
+    );
 
-    skip_ws(&mut lexer, tok::Ws::Space { count: 1 });
+    assert_ws(&mut iter, Ws::Space { count: 1 });
 
-    let tok2 = lexer.next().unwrap();
-    assert_eq!(lexer[tok2], tok::TokenKind::Ident("def".into()));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 4), Position::new(1, 7)),
+            &TokenKind::Ident("def".to_string()),
+        ))
+    );
 
-    skip_ws(&mut lexer, tok::Ws::Newline { count: 1 });
+    assert_ws(&mut iter, Ws::Newline { count: 1 });
 
-    let tok3 = lexer.next().unwrap();
-    assert_eq!(lexer[tok3], tok::TokenKind::Ident("ghi".into()));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(2, 0), Position::new(2, 3)),
+            &TokenKind::Ident("ghi".to_string()),
+        ))
+    );
 
-    skip_ws(&mut lexer, tok::Ws::Space { count: 1 });
+    assert_ws(&mut iter, Ws::Space { count: 1 });
 
-    let tok4 = lexer.next().unwrap();
-    assert_eq!(lexer[tok4], tok::TokenKind::Ident("jkl".into()));
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(2, 4), Position::new(2, 7)),
+            &TokenKind::Ident("jkl".to_string()),
+        ))
+    );
 
-    let tok5 = lexer.next().unwrap();
-    assert_eq!(lexer[tok5], tok::TokenKind::Eof);
-
-    assert_eq!(lexer.next(), None);
-
-    let (begin1, end2) = lexer.tokens.get_pos(tok1);
-    assert_eq!(begin1, Position::new(1, 0));
-    assert_eq!(end2, Position::new(1, 3));
-
-    let (begin2, end2) = lexer.tokens.get_pos(tok2);
-    assert_eq!(begin2, Position::new(1, 4));
-    assert_eq!(end2, Position::new(1, 7));
-
-    let (begin3, end3) = lexer.tokens.get_pos(tok3);
-    assert_eq!(begin3, Position::new(2, 0));
-    assert_eq!(end3, Position::new(2, 3));
-
-    let (begin4, end4) = lexer.tokens.get_pos(tok4);
-    assert_eq!(begin4, Position::new(2, 4));
-    assert_eq!(end4, Position::new(2, 7));
+    assert_eof(&mut iter);
 }
 
-// #[test]
-// fn scan_indentation() {
-//     let mut lexer = Lexer::new("\na\n b\n  c\n d\ne");
-//     assert_eq!(lexer.next(), Some(Token::ident("a")));
-//     assert_eq!(lexer.next(), Some(Token::indent()));
-//     assert_eq!(lexer.next(), Some(Token::ident("b")));
-//     assert_eq!(lexer.next(), Some(Token::indent()));
-//     assert_eq!(lexer.next(), Some(Token::ident("c")));
-//     assert_eq!(lexer.next(), Some(Token::dedent()));
-//     assert_eq!(lexer.next(), Some(Token::ident("d")));
-//     assert_eq!(lexer.next(), Some(Token::dedent()));
-//     assert_eq!(lexer.next(), Some(Token::ident("e")));
-//     assert_eq!(lexer.next(), None);
-// }
+#[test]
+fn scan_ws() {
+    let tokens = syn::tokenize("\na\n b\n  c\n d\ne");
+    let mut iter = tokens.iter().map(|(_, tok)| tok.kind());
 
-// #[test]
-// fn indent_token_are_emitted_only_if_indentation_changes() {
-//     let mut lexer = Lexer::new("a\n  b\n  c\n  \td\n  \t  e");
-//     assert_eq!(lexer.next(), Some(Token::ident("a")));
-//     assert_eq!(lexer.next(), Some(Token::indent()));
-//     assert_eq!(lexer.next(), Some(Token::ident("b")));
-//     assert_eq!(lexer.next(), Some(Token::ident("c")));
-//     assert_eq!(lexer.next(), Some(Token::indent()));
-//     assert_eq!(lexer.next(), Some(Token::ident("d")));
-//     assert_eq!(lexer.next(), Some(Token::indent()));
-//     assert_eq!(lexer.next(), Some(Token::ident("e")));
-//     assert_eq!(lexer.next(), None);
-// }
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident("a".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident("b".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident("c".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident("d".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident("e".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Eof));
+    assert_eq!(iter.next(), None);
+}
 
-// #[test]
-// fn no_mixed_indentation() {
-//     let mut lexer = Lexer::new("a\n  b\n\t\tc");
-//     assert_eq!(lexer.next(), Some(Token::ident("a")));
-//     assert_eq!(lexer.next(), Some(Token::indent()));
-//     assert_eq!(lexer.next(), Some(Token::ident("b")));
-//     assert_eq!(lexer.next(), Some(Token::unknown("\t\t")));
-//     assert_eq!(lexer.next(), Some(Token::ident("c")));
-//     assert_eq!(lexer.next(), None);
-// }
+#[test]
+fn ws_always_emitted() {
+    let token_vec = syn::tokenize("a\n  b\n  c\n  \td\n  \t  e");
+    let mut iter = token_vec.iter().map(|(_, tok)| tok.kind());
+
+    assert_eq!(iter.next(), Some(&TokenKind::Ident("a".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident("b".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident("c".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Tab { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident("d".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Tab { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident("e".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Eof));
+    assert_eq!(iter.next(), None);
+}
+
+#[test]
+fn ws_mixing_can_happen() {
+    let tokens = syn::tokenize("a\n  b\n\t\tc");
+    let mut iter = tokens.iter().map(|(_, tok)| tok.kind());
+
+    assert_eq!(iter.next(), Some(&TokenKind::Ident("a".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident("b".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Tab { count: 2 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident("c".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Eof));
+    assert_eq!(iter.next(), None);
+}

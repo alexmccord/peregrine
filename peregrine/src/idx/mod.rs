@@ -3,7 +3,7 @@ use std::{fmt, hash};
 mod indexed_vec;
 mod macros;
 
-pub use crate::idx::indexed_vec::IndexedVec;
+pub use crate::idx::indexed_vec::*;
 pub use crate::newindex;
 
 pub trait Idx: fmt::Debug + fmt::Display + Copy + Eq + hash::Hash {

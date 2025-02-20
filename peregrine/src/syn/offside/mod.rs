@@ -308,7 +308,7 @@ pub struct Relative {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Absolute(AbsoluteOffside);
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq)]
 enum AbsoluteOffside {
     Zero,
     One([Relative; 1]),
@@ -431,12 +431,12 @@ impl Offside {
         }
     }
 
-    pub fn absolute_offside(&self) -> Option<&Absolute> {
+    pub fn absolute_offside(&self) -> Option<Absolute> {
         if self.nonascii {
             return None;
         }
 
-        Some(&self.absolute)
+        Some(self.absolute.clone())
     }
 
     pub fn push_scan_unit(&mut self, scan_unit: ScanUnit) {
@@ -551,6 +551,23 @@ impl Absolute {
 
     fn last_mut(&mut self) -> Option<&mut Relative> {
         self.as_mut_slice().last_mut()
+    }
+}
+
+impl Clone for AbsoluteOffside {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Zero => Self::Zero,
+            Self::One(rs) => Self::One(rs.clone()),
+            Self::Two(rs) => Self::Two(rs.clone()),
+            Self::Three(rs) => Self::Three(rs.clone()),
+            // I'm not sorry for the crime against humanity here.
+            Self::Heap(vec) if vec.is_empty() => Self::Zero,
+            Self::Heap(vec) if vec.len() == 1 => Self::One([vec[0]]),
+            Self::Heap(vec) if vec.len() == 2 => Self::Two([vec[0], vec[1]]),
+            Self::Heap(vec) if vec.len() == 3 => Self::Three([vec[0], vec[1], vec[2]]),
+            Self::Heap(vec) => Self::Heap(vec.clone()),
+        }
     }
 }
 

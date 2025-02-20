@@ -6,16 +6,20 @@ use crate::ast::node::NodeId;
 use crate::ast::{Ast, TokenSpan};
 use crate::syn::lexer::tok::*;
 use crate::syn::lexer::Lexer;
+use crate::syn::offside::Absolute;
 use crate::syn::{ParseResult, SourceModule, SyntaxError};
+
+use super::offside::{Indentation, PartialOffsideOrd};
 
 mod tests;
 
 pub(crate) struct Parser {
     lexer: Lexer,
-    lookahead: Option<TokenId>,
+    lookahead: Option<(Option<Absolute>, Token)>,
     errors: Vec<(NodeId, SyntaxError)>,
     exprs: idx::Generation<ExprId>,
     decls: idx::Generation<DeclId>,
+    tokens: TokenVec,
 }
 
 enum Precedence {
@@ -29,22 +33,21 @@ enum Precedence {
 //
 // Most of the grammar doesn't care about whitespace, but some does, ignoring
 // the obvious like layouts.
-enum Significant {
-    Yes,
-    No,
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum Sensitivity {
+    Sensitive,
+    Insensitive,
 }
 
 impl Parser {
     fn new(input: impl Into<String>) -> Parser {
-        let mut lexer = Lexer::new(input);
-        let lookahead = lexer.next();
-
         Parser {
-            lexer,
-            lookahead,
+            lexer: Lexer::new(input),
+            lookahead: None,
             errors: Vec::new(),
             exprs: idx::Generation::new(),
             decls: idx::Generation::new(),
+            tokens: TokenVec::new(),
         }
     }
 
@@ -56,74 +59,60 @@ impl Parser {
         assert!(parser.next_tok().is_none());
 
         ParseResult {
-            source_module: SourceModule::new(Ast::new(decls), parser.lexer.into()),
+            source_module: SourceModule::new(Ast::new(decls), parser.tokens),
             errors: parser.errors,
         }
     }
 
-    fn skip_ws_if(&mut self, significance: Significant) -> Option<TokenId> {
-        let tok = match significance {
-            Insignificant => loop {
-                let tok = self.lexer.next();
-
-                break match tok {
-                    Some(tok) => match self.lexer[tok] {
-                        TokenKind::Ws(_) => continue,
-                        _ => Some(tok),
-                    },
-                    None => tok,
-                };
-            },
-            Significant => self.lexer.next(),
-        };
-
-        match tok {
-            Some(tok) => self.lookahead.replace(tok),
-            None => self.lookahead.take(),
+    fn consume_until(&mut self, sensitivity: Sensitivity) -> Option<(Option<Absolute>, TokenId)> {
+        while let Some((offside, tok)) = self.lexer.next() {
+            match tok.kind() {
+                TokenKind::Ws(_) if sensitivity == Sensitivity::Insensitive => continue,
+                _ => match self.lookahead.replace((offside, tok)) {
+                    Some((offside, tok)) => return Some((offside, self.tokens.push(tok))),
+                    None => (),
+                },
+            }
         }
+
+        let (offside, tok) = self.lookahead.take()?;
+        Some((offside, self.tokens.push(tok)))
     }
 
-    fn next_tok(&mut self) -> Option<TokenId> {
-        self.skip_ws_if(Significant::Yes)
+    fn next_non_ws_tok(&mut self) -> Option<(Option<Absolute>, TokenId)> {
+        self.consume_until(Sensitivity::Insensitive)
     }
 
-    fn next_tok_no_ws(&mut self) -> Option<TokenId> {
-        self.skip_ws_if(Significant::No)
+    fn next_tok(&mut self) -> Option<(Option<Absolute>, TokenId)> {
+        self.consume_until(Sensitivity::Sensitive)
     }
 
-    fn try_consume_with<F>(&mut self, ws: Significant, f: F) -> Option<TokenId>
+    fn try_consume<F>(&mut self, f: F) -> Option<(Option<Absolute>, TokenId)>
     where
         F: FnOnce(&TokenKind) -> bool,
     {
-        todo!()
-    }
-
-    fn try_consume<F>(&mut self, f: F) -> Option<TokenId>
-    where
-        F: FnOnce(&TokenKind) -> bool,
-    {
-        if f(&self.lexer[self.lookahead?]) {
-            self.next_tok()
+        if f(&self.lookahead.as_ref()?.1.kind()) {
+            self.next_non_ws_tok()
         } else {
             None
         }
     }
 
-    fn try_parse_kw(&mut self, kw: Keyword) -> Option<TokenId> {
+    fn try_parse_kw(&mut self, kw: Keyword) -> Option<(Option<Absolute>, TokenId)> {
         self.try_consume(|tok| match tok {
             TokenKind::Kw(kw2) => &kw == kw2,
             _ => false,
         })
     }
 
-    fn try_parse_operator(&mut self, str: impl AsRef<str>) -> Option<TokenId> {
+    fn try_parse_operator(&mut self, str: impl AsRef<str>) -> Option<(Option<Absolute>, TokenId)> {
         self.try_consume(|tok| match tok {
             TokenKind::Operator(op) => op == str.as_ref(),
             _ => false,
         })
     }
 
-    fn try_parse_group(&mut self, group: Group) -> Option<TokenId> {
+    fn try_parse_group(&mut self, group: Group) -> Option<(Option<Absolute>, TokenId)> {
         self.try_consume(|tok| match tok {
             TokenKind::Group(g) => g == &group,
             _ => false,
@@ -185,12 +174,12 @@ impl Parser {
     }
 
     fn parse_decl(&mut self) -> Option<Decl> {
-        let tok = self.next_tok()?;
-        self.parse_decl_tail(tok)
+        let (offside, tok) = self.next_non_ws_tok()?;
+        self.parse_decl_tail(offside, tok)
     }
 
-    fn parse_decl_tail(&mut self, tok: TokenId) -> Option<Decl> {
-        match self.lexer[tok] {
+    fn parse_decl_tail(&mut self, offside: Option<Absolute>, tok: TokenId) -> Option<Decl> {
+        match self.tokens[tok].kind() {
             TokenKind::Unknown(_) => todo!(),
             TokenKind::Kw(Keyword::Module) => Some(self.parse_module_tail(tok)),
             TokenKind::Kw(Keyword::Import) => Some(self.parse_import_tail(tok)),
@@ -224,7 +213,7 @@ impl Parser {
             TokenKind::Ws(_) => todo!(),
             TokenKind::Semicolon => todo!(),
             TokenKind::Comma => todo!(),
-            TokenKind::Eof => todo!(),
+            TokenKind::Eof => None,
         }
     }
 
@@ -244,22 +233,21 @@ impl Parser {
         let mut last_tok = None;
 
         loop {
-            let Some(id) = self.next_tok() else {
+            let Some((_, id)) = self.next_non_ws_tok() else {
                 ok = false;
                 break;
             };
 
             last_tok = Some(id);
 
-            if let TokenKind::Ident(ident) = &self.lexer[id] {
+            if let TokenKind::Ident(ident) = &self.tokens[id].kind() {
                 path.push(PathNode::Name(ident.clone()));
 
-                let dot_tok = self.try_parse_operator(".");
-                if dot_tok.is_none() {
+                let Some((_, tok)) = self.try_parse_operator(".") else {
                     break;
-                } else {
-                    last_tok = dot_tok;
-                }
+                };
+
+                last_tok = Some(tok);
             } else {
                 ok = false;
                 path.push(PathNode::Missing);
@@ -435,7 +423,7 @@ impl Parser {
 
         // TODO: if eq_tok is None and the layout rule did not dedent, then
         // perhaps the user forgot to supply an `= expr`.
-        let Some(eq_tok) = self.try_parse_operator("=") else {
+        let Some((_, eq_tok)) = self.try_parse_operator("=") else {
             let last_tok = f.end_token();
             return self.make_decl(DeclKind::let_the_expr(f), let_tok, last_tok);
         };
@@ -449,7 +437,7 @@ impl Parser {
         let decl = self.make_decl(DeclKind::let_the_expr_be(f, e), let_tok, last_tok);
 
         // We're parsing `in` here just for error reporting.
-        let Some(in_tok) = self.try_parse_kw(Keyword::In) else {
+        let Some((_, in_tok)) = self.try_parse_kw(Keyword::In) else {
             return decl;
         };
 
@@ -462,6 +450,18 @@ impl Parser {
         )
     }
 
+    fn parse_layout(&mut self, offside: Option<Absolute>) -> Option<Indentation> {
+        loop {
+            let (next_offside, tok) = self.next_tok()?;
+
+            break match self.tokens[tok].kind() {
+                TokenKind::Ws(_) => continue,
+                TokenKind::Eof => None,
+                _ => offside.partial_cmp_offside(&next_offside),
+            };
+        }
+    }
+
     // When to use `self.parse_expr` or `self.parse_expr_by_tok`?
     //
     // That depends on the current parser state:
@@ -471,7 +471,8 @@ impl Parser {
     //   2. Otherwise, if you don't have the current token, just call `self.parse_expr`.
     //      This one will obtain the current token and then forward that anyway.
     fn parse_expr(&mut self, pred: Precedence) -> Option<Expr> {
-        self.parse_expr_by_tok(pred, self.lookahead?)
+        let (_, tok) = self.next_non_ws_tok()?;
+        self.parse_expr_by_tok(pred, tok)
     }
 
     fn parse_expr_by_tok(&mut self, pred: Precedence, tok: TokenId) -> Option<Expr> {
@@ -486,7 +487,7 @@ impl Parser {
     fn parse_ty_expr_by_tok(&mut self, tok: TokenId) -> Option<Expr> {
         let expr = self.parse_expr_by_tok(Precedence::App, tok)?;
 
-        let Some(colon_tok) = self.try_parse_operator(":") else {
+        let Some((_, colon_tok)) = self.try_parse_operator(":") else {
             return Some(expr);
         };
 
@@ -536,7 +537,7 @@ impl Parser {
     }
 
     fn parse_app_expr_by_tok(&mut self, tok: TokenId) -> Option<Expr> {
-        match &self.lexer[tok] {
+        match &self.tokens[tok].kind() {
             TokenKind::Unknown(_) => todo!(),
             TokenKind::Kw(Keyword::Module) => None,
             TokenKind::Kw(Keyword::Import) => todo!(), // TODO: support, scoped imports are nice.
@@ -577,7 +578,7 @@ impl Parser {
             TokenKind::Ws(_) => todo!(),
             TokenKind::Semicolon => todo!(), // TODO: error,
             TokenKind::Comma => todo!(),     // TODO: error,
-            TokenKind::Eof => todo!(),
+            TokenKind::Eof => None,
         }
     }
 
@@ -586,7 +587,7 @@ impl Parser {
             return self.report_expr_error(SyntaxError::MissingExpr, let_tok, let_tok);
         };
 
-        let Some(eq_tok) = self.try_parse_operator("=") else {
+        let Some((_, eq_tok)) = self.try_parse_operator("=") else {
             let first_tok = f.begin_token();
             let last_tok = f.end_token();
 
@@ -608,7 +609,7 @@ impl Parser {
             return self.make_expr(ExprKind::let_be(f, e), let_tok, eq_tok);
         };
 
-        let Some(in_tok) = self.try_parse_kw(Keyword::In) else {
+        let Some((_, in_tok)) = self.try_parse_kw(Keyword::In) else {
             let last_tok = e.end_token();
             return self.make_expr(ExprKind::let_be(f, e), let_tok, last_tok);
         };
@@ -639,12 +640,15 @@ impl Parser {
             .parse_expr(Precedence::TyAnn)
             .unwrap_or_else(|| self.report_expr_error(SyntaxError::MissingExpr, if_tok, if_tok));
         let then_tok = self.try_parse_kw(Keyword::Then);
-        let last_tok = then_tok.unwrap_or(if_tok);
+        let last_tok = then_tok.as_ref().map(|(_, t)| t.clone()).unwrap_or(if_tok);
         let consequent = self.parse_expr(Precedence::TyAnn).unwrap_or_else(|| {
             self.report_expr_error(SyntaxError::MissingExpr, last_tok, last_tok)
         });
         let else_tok = self.try_parse_kw(Keyword::Else);
-        let last_tok = else_tok.unwrap_or(last_tok);
+        let last_tok = else_tok
+            .as_ref()
+            .map(|(_, t)| t.clone())
+            .unwrap_or(last_tok);
         let alternative = self.parse_expr(Precedence::TyAnn).unwrap_or_else(|| {
             self.report_expr_error(SyntaxError::MissingExpr, last_tok, last_tok)
         });
@@ -686,7 +690,7 @@ impl Parser {
         self.make_expr(ExprKind::str(str), str_tok, str_tok)
     }
 
-    fn parse_assoc_expr_by_tok(&mut self, tok: TokenId) -> Option<Expr> {
+    fn parse_assoc_expr_by_tok(&mut self, open_paren: TokenId) -> Option<Expr> {
         // I could have used a loop here, but I didn't because there's some subtlety
         // wrt the way we track expression source spans, e.g. if we wrote the naive
         // loop, it might be the case that the expression
@@ -713,8 +717,8 @@ impl Parser {
         //
         // So for now, we'll just do the dumb simple thing of recursion. If it becomes a
         // problem, I'll be motivated to fix it.
-        let tok = self.next_tok()?;
-        match self.lexer[tok] {
+        let (offside, tok) = self.next_non_ws_tok()?;
+        match self.tokens[tok].kind() {
             TokenKind::Unknown(_) => todo!(),
             TokenKind::Kw(_) => todo!(),
             TokenKind::Ident(_) => todo!(),
@@ -723,7 +727,7 @@ impl Parser {
             TokenKind::Operator(_) => todo!(),
             TokenKind::Group(Group::Paren(Parity::Opened)) => {
                 let e = self.parse_expr(Precedence::Atom);
-                match self.next_tok() {
+                match self.next_non_ws_tok() {
                     Some(tok) => todo!(),
                     None => todo!(),
                 }
@@ -741,12 +745,12 @@ impl Parser {
     }
 
     fn parse_either_unit_or_expr_tail(&mut self, open_paren_tok: TokenId) -> Expr {
-        if let Some(closed_paren_tok) = self.try_parse_group(Group::Paren(Parity::Closed)) {
+        if let Some((_, closed_paren_tok)) = self.try_parse_group(Group::Paren(Parity::Closed)) {
             return self.make_expr(ExprKind::unit(), open_paren_tok, closed_paren_tok);
         }
 
-        let e = match self.next_tok() {
-            Some(tok) => match self.lexer[tok] {
+        let e = match self.next_non_ws_tok() {
+            Some((_, tok)) => match self.tokens[tok].kind() {
                 TokenKind::Group(Group::Paren(Parity::Closed)) => None,
                 _ => self.parse_expr_by_tok(Precedence::TyAnn, tok),
             },

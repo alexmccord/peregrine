@@ -1,7 +1,3 @@
-use std::ops::Index;
-
-use crate::idx;
-
 use crate::ast::Position;
 use crate::syn::cursor::{Cursor, Delimiter, Operator, Quotation, ScanUnit, Space};
 use crate::syn::offside::Offside;
@@ -9,24 +5,30 @@ use crate::syn::offside::Offside;
 pub mod tok;
 use tok::*;
 
+use super::offside::Absolute;
+
 mod tests;
 
 #[derive(Debug)]
 pub(crate) struct Lexer {
     cursor: Cursor,
-    tokens: TokenVec,
     current_pos: Position,
     offside: Offside,
 }
 
+#[derive(Debug)]
+pub struct TokenStream {
+    lexer: Lexer,
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Scan {
+enum Scan {
     Ok(Cmd),
     Err(Cmd),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Cmd {
+enum Cmd {
     Append,
     Terminate,
 }
@@ -40,12 +42,8 @@ where
 
 impl Lexer {
     pub fn new(input: impl Into<String>) -> Lexer {
-        // We pre-allocate the vectors with capacity to skip the
-        // initial vector growth. It is expected that in 99.9% of
-        // the time, these would not be small vectors.
         Lexer {
             cursor: Cursor::new(input),
-            tokens: idx::IndexedVec::with_capacity(256),
             current_pos: Position::new(1, 0),
             offside: Offside::new(),
         }
@@ -263,7 +261,12 @@ impl Lexer {
             ScanUnit::Eof => Scan::Ok(Cmd::Terminate),
         });
 
-        map_tok(res, |(i, j)| TokenKind::Ws(Ws::Space { count: j - i }))
+        map_tok(res, |(i, j)| {
+            TokenKind::Ws(match space {
+                Space::Space => Ws::Space { count: j - i },
+                Space::Tab => Ws::Tab { count: j - i },
+            })
+        })
     }
 
     fn scan_newlines(&mut self) -> TokenKind {
@@ -283,8 +286,16 @@ impl Lexer {
     }
 }
 
+impl TokenStream {
+    pub fn new(input: impl Into<String>) -> TokenStream {
+        TokenStream {
+            lexer: Lexer::new(input),
+        }
+    }
+}
+
 impl Iterator for Lexer {
-    type Item = TokenId;
+    type Item = (Option<Absolute>, Token);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.cursor.end() {
@@ -311,20 +322,14 @@ impl Iterator for Lexer {
             }
         };
 
-        Some(self.tokens.push(Token::new(kind, pos)))
+        Some((self.offside.absolute_offside(), Token::new(kind, pos)))
     }
 }
 
-impl Index<TokenId> for Lexer {
-    type Output = TokenKind;
+impl Iterator for TokenStream {
+    type Item = Token;
 
-    fn index(&self, index: TokenId) -> &Self::Output {
-        self.tokens[index].kind()
-    }
-}
-
-impl Into<TokenVec> for Lexer {
-    fn into(self) -> TokenVec {
-        self.tokens
+    fn next(&mut self) -> Option<Self::Item> {
+        self.lexer.next().map(|(_, tok)| tok)
     }
 }

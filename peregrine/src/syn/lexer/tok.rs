@@ -104,7 +104,7 @@ pub type TokenVec = idx::IndexedVec<TokenId, Token>;
 impl TokenVec {
     pub fn get_pos(&self, id: TokenId) -> (Position, Position) {
         let begin = self[id].pos;
-        let end = self.get(TokenVec::next(id)).map_or(begin, |tok| tok.pos);
+        let end = self.get(TokenVec::next_id(id)).map_or(begin, |tok| tok.pos);
         (begin, end)
     }
 }
