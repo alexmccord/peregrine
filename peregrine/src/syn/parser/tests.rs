@@ -1,5 +1,7 @@
 #![cfg(test)]
 use crate::ast::decl;
+use crate::ast::decl::Path;
+use crate::ast::decl::PathNode;
 use crate::ast::expr;
 use crate::ast::Position;
 use crate::syn;
@@ -17,8 +19,14 @@ fn parse_module_decl() {
 
     let module_decl = iter.next().unwrap();
     let module = module_decl.as_module().unwrap();
-    let path = vec!["A".to_string(), "B".to_string(), "C".to_string()];
-    assert_eq!(module.path(), Some(&path));
+    assert_eq!(
+        module.path(),
+        Some(&Path::new(vec![
+            PathNode::Name("A".to_string()),
+            PathNode::Name("B".to_string()),
+            PathNode::Name("C".to_string()),
+        ]))
+    );
 
     assert!(iter.next().is_none());
 }
@@ -31,7 +39,14 @@ fn parse_import_decl() {
 
     let import_decl = iter.next().unwrap();
     let import = import_decl.as_import().unwrap();
-    assert_eq!(import.path(), &vec!["A", "B", "C"]);
+    assert_eq!(
+        import.path(),
+        &Path::new(vec![
+            PathNode::Name("A".to_string()),
+            PathNode::Name("B".to_string()),
+            PathNode::Name("C".to_string()),
+        ])
+    );
 
     let import_src_span = source_module.source_span(import_decl);
     assert_eq!(import_src_span.begin, Position::new(1, 0));
@@ -42,8 +57,8 @@ fn parse_import_decl() {
 
 #[test]
 fn parse_export_decl() {
-    let source_module = syn::parse("export let five = 5").source_module;
-    let mut iter = source_module.ast.decls().iter();
+    let result = syn::parse("export let five = 5");
+    let mut iter = result.ast().decls().iter();
 
     let export_decl = iter.next().unwrap();
     let export = export_decl.as_export().unwrap();
@@ -63,8 +78,8 @@ fn parse_export_decl() {
 
 #[test]
 fn parse_let_five_be_5() {
-    let source_module = syn::parse("let five = 5").source_module;
-    let mut iter = source_module.ast.decls().iter();
+    let result = syn::parse("let five = 5");
+    let mut iter = result.ast().decls().iter();
 
     let let_decl = iter.next().unwrap();
     let l = let_decl.as_let().unwrap();
@@ -83,28 +98,25 @@ fn parse_let_five_be_5() {
 
 #[test]
 fn parse_let_paren_x_paren_be_2() {
-    let source_module = syn::parse("let (x) = 2").source_module;
-    let mut iter = source_module.ast.decls().iter();
+    let result = syn::parse("let (x) = 2");
+    let mut iter = result.ast().decls().iter();
 
     let let_decl = iter.next().unwrap();
     let l = let_decl.as_let().unwrap();
 
-    match l {
-        decl::Let::Decl(..) => panic!("not this one"),
-        decl::Let::DeclExpr(f, e) => {
-            let expr::Var(var) = f.as_var().unwrap();
-            assert_eq!(var, "x");
+    let f = l.get_the_expr();
+    let expr::Var(var) = f.as_var().unwrap();
+    assert_eq!(var, "x");
 
-            let expr::Num(num) = e.as_num().unwrap();
-            assert_eq!(num, "2");
-        }
-    }
+    let e = l.get_be_expr().unwrap();
+    let expr::Num(num) = e.as_num().unwrap();
+    assert_eq!(num, "2");
 }
 
 #[test]
 fn parse_let_id_which_is_a_to_a() {
-    let source_module = syn::parse("let id : a -> a").source_module;
-    let mut iter = source_module.ast.decls().iter();
+    let result = syn::parse("let id : a -> a");
+    let mut iter = result.ast().decls().iter();
 
     let let_decl = iter.next().unwrap();
     let l = let_decl.as_let().unwrap();
@@ -132,8 +144,8 @@ fn parse_let_id_which_is_a_to_a() {
 
 #[test]
 fn parse_let_id_x_be_x() {
-    let source_module = syn::parse("let id x = x").source_module;
-    let mut iter = source_module.ast.decls().iter();
+    let result = syn::parse("let id x = x");
+    let mut iter = result.ast().decls().iter();
 
     let let_decl = iter.next().unwrap();
     let l = let_decl.as_let().unwrap();
@@ -156,12 +168,10 @@ fn parse_let_id_x_be_x() {
 #[test]
 fn parse_let_five_of_missing_type() {
     let result = syn::parse("let five :");
-    let source_module = result.source_module;
-    let errors = result.errors;
+    let errors = result.errors.clone();
+    let mut iter = result.ast().decls().iter();
 
-    let mut decls = source_module.ast.decls().iter();
-
-    let let_decl = decls.next().unwrap();
+    let let_decl = iter.next().unwrap();
     let l = let_decl.as_let().unwrap();
 
     match l {
@@ -184,10 +194,10 @@ fn parse_let_five_of_missing_type() {
 
 #[test]
 fn parse_unit() {
-    let source_module = syn::parse("let unit = ()").source_module;
-    let mut decls = source_module.ast.decls().iter();
+    let result = syn::parse("let unit = ()");
+    let mut iter = result.ast().decls().iter();
 
-    let let_decl = decls.next().unwrap();
+    let let_decl = iter.next().unwrap();
     let l = let_decl.as_let().unwrap();
 
     match l {
@@ -198,11 +208,11 @@ fn parse_unit() {
 
 #[test]
 fn parsing_preserves_spans() {
-    let source_module = syn::parse("let five = 5").source_module;
-    let mut decls = source_module.ast.decls().iter();
+    let result = syn::parse("let five = 5");
+    let mut iter = result.ast().decls().iter();
 
-    let let_decl = decls.next().unwrap();
-    let let_decl_span = source_module.source_span(let_decl);
+    let let_decl = iter.next().unwrap();
+    let let_decl_span = result.source_module.source_span(let_decl);
 
     assert_eq!(let_decl_span.begin, Position::new(1, 0));
     assert_eq!(let_decl_span.end, Position::new(1, 12));

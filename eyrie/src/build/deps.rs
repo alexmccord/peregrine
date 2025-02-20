@@ -28,6 +28,7 @@ impl<'ast> Dependencies<'ast> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use peregrine::ast::decl::{Path, PathNode};
     use peregrine::syn;
 
     #[test]
@@ -44,7 +45,10 @@ mod tests {
 
         let deps = Dependencies::get(result.ast());
         assert_eq!(deps.imports.len(), 1);
-        assert_eq!(deps.imports[0].1.path(), &vec!["A"]);
+        assert_eq!(
+            deps.imports[0].1.path(),
+            &Path::new(vec![PathNode::Name("A".to_string())])
+        );
     }
 
     #[test]
@@ -53,8 +57,24 @@ mod tests {
 
         let deps = Dependencies::get(result.ast());
         assert_eq!(deps.imports.len(), 3);
-        assert_eq!(deps.imports[0].1.path(), &vec!["A"]);
-        assert_eq!(deps.imports[1].1.path(), &vec!["A", "B"]);
-        assert_eq!(deps.imports[2].1.path(), &vec!["A", "B", "C"]);
+        assert_eq!(
+            deps.imports[0].1.path(),
+            &Path::new(vec![PathNode::Name("A".to_string())])
+        );
+        assert_eq!(
+            deps.imports[1].1.path(),
+            &Path::new(vec![
+                PathNode::Name("A".to_string()),
+                PathNode::Name("B".to_string()),
+            ])
+        );
+        assert_eq!(
+            deps.imports[2].1.path(),
+            &Path::new(vec![
+                PathNode::Name("A".to_string()),
+                PathNode::Name("B".to_string()),
+                PathNode::Name("C".to_string()),
+            ])
+        );
     }
 }

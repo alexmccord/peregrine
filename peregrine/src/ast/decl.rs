@@ -50,15 +50,26 @@ pub enum DeclKind {
     Error(Option<DeclId>),
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Path {
+    nodes: Vec<PathNode>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum PathNode {
+    Name(String),
+    Missing,
+}
+
 #[derive(Debug)]
 pub struct Module {
-    path: Option<Vec<String>>,
+    path: Option<Path>,
     decls: Vec<Decl>,
 }
 
 #[derive(Debug)]
 pub struct Import {
-    path: Vec<String>,
+    path: Path,
 }
 
 #[derive(Debug)]
@@ -273,11 +284,11 @@ impl Decl {
 }
 
 impl DeclKind {
-    pub fn module(path: Option<Vec<String>>, decls: Vec<Decl>) -> DeclKind {
+    pub fn module(path: Option<Path>, decls: Vec<Decl>) -> DeclKind {
         DeclKind::Module(Module::new(path, decls))
     }
 
-    pub fn import(path: Vec<String>) -> DeclKind {
+    pub fn import(path: Path) -> DeclKind {
         DeclKind::Import(Import::new(path))
     }
 
@@ -333,12 +344,18 @@ impl DeclKind {
     }
 }
 
+impl Path {
+    pub fn new(nodes: Vec<PathNode>) -> Path {
+        Path { nodes }
+    }
+}
+
 impl Module {
-    pub fn new(path: Option<Vec<String>>, decls: Vec<Decl>) -> Module {
+    pub fn new(path: Option<Path>, decls: Vec<Decl>) -> Module {
         Module { path, decls }
     }
 
-    pub fn path(&self) -> Option<&Vec<String>> {
+    pub fn path(&self) -> Option<&Path> {
         self.path.as_ref()
     }
 
@@ -348,11 +365,11 @@ impl Module {
 }
 
 impl Import {
-    pub fn new(path: Vec<String>) -> Import {
+    pub fn new(path: Path) -> Import {
         Import { path }
     }
 
-    pub fn path(&self) -> &Vec<String> {
+    pub fn path(&self) -> &Path {
         &self.path
     }
 }

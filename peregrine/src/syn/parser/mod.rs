@@ -1,6 +1,6 @@
 use crate::idx;
 
-use crate::ast::decl::{Decl, DeclId, DeclKind};
+use crate::ast::decl::{Decl, DeclId, DeclKind, Path, PathNode};
 use crate::ast::expr::{Expr, ExprId, ExprKind, Stmt};
 use crate::ast::node::NodeId;
 use crate::ast::{Ast, TokenSpan};
@@ -238,7 +238,7 @@ impl Parser {
         decls
     }
 
-    fn parse_path(&mut self) -> (bool, Vec<String>, Option<TokenId>) {
+    fn parse_path(&mut self) -> (bool, Path, Option<TokenId>) {
         let mut ok = true;
         let mut path = Vec::new();
         let mut last_tok = None;
@@ -252,7 +252,7 @@ impl Parser {
             last_tok = Some(id);
 
             if let TokenKind::Ident(ident) = &self.lexer[id] {
-                path.push(ident.clone());
+                path.push(PathNode::Name(ident.clone()));
 
                 let dot_tok = self.try_parse_operator(".");
                 if dot_tok.is_none() {
@@ -262,10 +262,11 @@ impl Parser {
                 }
             } else {
                 ok = false;
+                path.push(PathNode::Missing);
             }
         }
 
-        (ok, path, last_tok)
+        (ok, Path::new(path), last_tok)
     }
 
     fn parse_module_tail(&mut self, module_tok: TokenId) -> Decl {
