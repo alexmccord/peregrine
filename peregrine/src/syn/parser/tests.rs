@@ -1,5 +1,4 @@
 #![cfg(test)]
-use std::result;
 
 use crate::ast::decl;
 use crate::ast::decl::Path;
