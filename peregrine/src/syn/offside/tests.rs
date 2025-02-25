@@ -1,9 +1,9 @@
 #![cfg(test)]
 use super::*;
-use crate::syn::cursor::{Cursor, Operator};
+use crate::syn::cursor::{Cursor, Operator, ScanUnit};
 
-fn writeln_target_abs<F>(
-    offside: &mut Offside,
+fn write_target_abs<F>(
+    offside: &mut OffsideBy<ScanUnit>,
     str: impl Into<String>,
     f: F,
 ) -> Option<Option<Absolute>>
@@ -13,26 +13,26 @@ where
     let mut absolute = None;
     for su in Cursor::new(str) {
         if absolute.is_none() && f(&su) {
-            absolute = Some(offside.absolute_offside());
+            absolute = Some(offside.absolute().cloned());
         }
 
-        offside.push_scan_unit(su);
+        offside.add(&su);
     }
 
     absolute
 }
 
-fn writeln_abs(offside: &mut Offside, str: &str) -> Option<Absolute> {
+fn write_abs(offside: &mut OffsideBy<ScanUnit>, str: &str) -> Absolute {
     for su in Cursor::new(str) {
-        offside.push_scan_unit(su);
+        offside.add(&su);
     }
 
-    offside.absolute_offside()
+    offside.absolute.clone()
 }
 
-fn writeln(offside: &mut Offside, str: &str) -> Option<Relative> {
+fn write(offside: &mut OffsideBy<ScanUnit>, str: &str) -> Option<Relative> {
     for su in Cursor::new(str) {
-        offside.push_scan_unit(su);
+        offside.add(&su);
     }
 
     offside.absolute.as_slice().last().cloned()
@@ -40,13 +40,13 @@ fn writeln(offside: &mut Offside, str: &str) -> Option<Relative> {
 
 #[test]
 fn push_spaces() {
-    let mut offside = Offside::new();
+    let mut offside = OffsideBy::new();
 
-    let rel1 = writeln(&mut offside, " ").unwrap();
+    let rel1 = write(&mut offside, " ").unwrap();
     assert_eq!(rel1.monospace, 1);
     assert_eq!(rel1.elastic, 0);
 
-    let rel2 = writeln(&mut offside, " ").unwrap();
+    let rel2 = write(&mut offside, " ").unwrap();
     assert_eq!(rel2.monospace, 2);
     assert_eq!(rel2.elastic, 0);
     assert_eq!(offside.absolute.as_slice().len(), 1);
@@ -54,13 +54,13 @@ fn push_spaces() {
 
 #[test]
 fn push_tabs() {
-    let mut offside = Offside::new();
+    let mut offside = OffsideBy::new();
 
-    let rel1 = writeln(&mut offside, "\t").unwrap();
+    let rel1 = write(&mut offside, "\t").unwrap();
     assert_eq!(rel1.monospace, 0);
     assert_eq!(rel1.elastic, 1);
 
-    let rel2 = writeln(&mut offside, "\t").unwrap();
+    let rel2 = write(&mut offside, "\t").unwrap();
     assert_eq!(rel2.monospace, 0);
     assert_eq!(rel2.elastic, 2);
     assert_eq!(offside.absolute.as_slice().len(), 1);
@@ -68,34 +68,34 @@ fn push_tabs() {
 
 #[test]
 fn push_spaces_and_then_tabs_and_then_spaces() {
-    let mut offside = Offside::new();
+    let mut offside = OffsideBy::new();
 
-    let rel1 = writeln(&mut offside, " ").unwrap();
+    let rel1 = write(&mut offside, " ").unwrap();
     assert_eq!(rel1.monospace, 1);
     assert_eq!(rel1.elastic, 0);
     assert_eq!(offside.absolute.as_slice().len(), 1);
 
-    let rel2 = writeln(&mut offside, " ").unwrap();
+    let rel2 = write(&mut offside, " ").unwrap();
     assert_eq!(rel2.monospace, 2);
     assert_eq!(rel2.elastic, 0);
     assert_eq!(offside.absolute.as_slice().len(), 1);
 
-    let rel3 = writeln(&mut offside, "\t").unwrap();
+    let rel3 = write(&mut offside, "\t").unwrap();
     assert_eq!(rel3.monospace, 2);
     assert_eq!(rel3.elastic, 1);
     assert_eq!(offside.absolute.as_slice().len(), 1);
 
-    let rel4 = writeln(&mut offside, "\t").unwrap();
+    let rel4 = write(&mut offside, "\t").unwrap();
     assert_eq!(rel4.monospace, 2);
     assert_eq!(rel4.elastic, 2);
     assert_eq!(offside.absolute.as_slice().len(), 1);
 
-    let rel5 = writeln(&mut offside, " ").unwrap();
+    let rel5 = write(&mut offside, " ").unwrap();
     assert_eq!(rel5.monospace, 1);
     assert_eq!(rel5.elastic, 0);
     assert_eq!(offside.absolute.as_slice().len(), 2);
 
-    let rel6 = writeln(&mut offside, " ").unwrap();
+    let rel6 = write(&mut offside, " ").unwrap();
     assert_eq!(rel6.monospace, 2);
     assert_eq!(rel6.elastic, 0);
     assert_eq!(offside.absolute.as_slice().len(), 2);
@@ -103,34 +103,34 @@ fn push_spaces_and_then_tabs_and_then_spaces() {
 
 #[test]
 fn push_cr() {
-    let mut offside = Offside::new();
+    let mut offside = OffsideBy::new();
 
-    assert_eq!(writeln(&mut offside, "\r"), None);
+    assert_eq!(write(&mut offside, "\r"), None);
     assert_eq!(offside.absolute.as_slice().len(), 0);
 }
 
 #[test]
 fn push_lf() {
-    let mut offside = Offside::new();
+    let mut offside = OffsideBy::new();
 
-    assert_eq!(writeln(&mut offside, "\n"), None);
+    assert_eq!(write(&mut offside, "\n"), None);
     assert_eq!(offside.absolute.as_slice().len(), 0);
 }
 
 #[test]
 fn push_crlf() {
-    let mut offside = Offside::new();
+    let mut offside = OffsideBy::new();
 
-    assert_eq!(writeln(&mut offside, "\r\n"), None);
+    assert_eq!(write(&mut offside, "\r\n"), None);
     assert_eq!(offside.absolute.as_slice().len(), 0);
 }
 
 #[test]
 fn push_anything_ascii() {
-    let mut offside = Offside::new();
+    let mut offside = OffsideBy::new();
 
     let input = "abc12@'?.,;";
-    let rel1 = writeln(&mut offside, input).unwrap();
+    let rel1 = write(&mut offside, input).unwrap();
     assert_eq!(rel1.monospace, input.len() as u16);
     assert_eq!(rel1.elastic, 0);
     assert_eq!(offside.absolute.as_slice().len(), 1);
@@ -138,30 +138,30 @@ fn push_anything_ascii() {
 
 #[test]
 fn push_including_nonascii() {
-    let mut offside = Offside::new();
+    let mut offside = OffsideBy::new();
 
-    let rel1 = writeln(&mut offside, "!").unwrap();
+    let rel1 = write(&mut offside, "!").unwrap();
     assert_eq!(rel1.monospace, 1);
     assert_eq!(rel1.elastic, 0);
     assert_eq!(offside.nonascii, false);
     assert_eq!(offside.absolute.as_slice().len(), 1);
 
-    let res2 = writeln(&mut offside, "α");
+    let res2 = write(&mut offside, "α");
     assert_eq!(res2, None);
     assert_eq!(offside.nonascii, true);
     assert_eq!(offside.absolute.as_slice().len(), 0);
 
-    let res3 = writeln(&mut offside, "©");
+    let res3 = write(&mut offside, "©");
     assert_eq!(res3, None);
     assert_eq!(offside.nonascii, true);
     assert_eq!(offside.absolute.as_slice().len(), 0);
 
-    let res4 = writeln(&mut offside, "\n");
+    let res4 = write(&mut offside, "\n");
     assert_eq!(res4, None);
     assert_eq!(offside.nonascii, false);
     assert_eq!(offside.absolute.as_slice().len(), 0);
 
-    let res5 = writeln(&mut offside, "€");
+    let res5 = write(&mut offside, "€");
     assert_eq!(res5, None);
     assert_eq!(offside.nonascii, true);
     assert_eq!(offside.absolute.as_slice().len(), 0);
@@ -169,34 +169,34 @@ fn push_including_nonascii() {
 
 #[test]
 fn really_stress_test_it() {
-    let mut offside = Offside::new();
+    let mut offside = OffsideBy::new();
 
-    let rel1 = writeln(&mut offside, "abc ").unwrap();
+    let rel1 = write(&mut offside, "abc ").unwrap();
     assert_eq!(rel1.monospace, 4);
     assert_eq!(rel1.elastic, 0);
     assert_eq!(offside.absolute.as_slice().len(), 1);
 
-    let rel2 = writeln(&mut offside, "\t").unwrap();
+    let rel2 = write(&mut offside, "\t").unwrap();
     assert_eq!(rel2.monospace, 4);
     assert_eq!(rel2.elastic, 1);
     assert_eq!(offside.absolute.as_slice().len(), 1);
 
-    let rel3 = writeln(&mut offside, "abc   def").unwrap();
+    let rel3 = write(&mut offside, "abc   def").unwrap();
     assert_eq!(rel3.monospace, 9);
     assert_eq!(rel3.elastic, 0);
     assert_eq!(offside.absolute.as_slice().len(), 2);
 
-    let rel4 = writeln(&mut offside, "\t\t\t").unwrap();
+    let rel4 = write(&mut offside, "\t\t\t").unwrap();
     assert_eq!(rel4.monospace, 9);
     assert_eq!(rel4.elastic, 3);
     assert_eq!(offside.absolute.as_slice().len(), 2);
 
-    let rel5 = writeln(&mut offside, " s").unwrap();
+    let rel5 = write(&mut offside, " s").unwrap();
     assert_eq!(rel5.monospace, 2);
     assert_eq!(rel5.elastic, 0);
     assert_eq!(offside.absolute.as_slice().len(), 3);
 
-    let res6 = writeln(&mut offside, "\n");
+    let res6 = write(&mut offside, "\n");
     assert_eq!(res6, None);
     assert_eq!(offside.absolute.as_slice().len(), 0);
 }
@@ -206,11 +206,11 @@ fn cannot_calculate_offsides_on_a_line_with_nonascii() {
     let line1 = format!(r#"f x y@"{}" | x == y    = Just (x ++ y){}"#, "!©α€", "\n");
     let line2 = format!(r#"       {}  | otherwise = Nothing"#, "    ");
 
-    let mut offside = Offside::new();
+    let mut offside = OffsideBy::new();
 
     let target = ScanUnit::Operator(Operator('|'));
-    let absolute1 = writeln_target_abs(&mut offside, &line1, |su| su == &target).unwrap();
-    let absolute2 = writeln_target_abs(&mut offside, &line2, |su| su == &target).unwrap();
+    let absolute1 = write_target_abs(&mut offside, &line1, |su| su == &target).unwrap();
+    let absolute2 = write_target_abs(&mut offside, &line2, |su| su == &target).unwrap();
 
     assert!(absolute1.is_none());
     assert!(absolute2.is_some());
@@ -222,16 +222,16 @@ fn cannot_calculate_offsides_on_a_line_with_nonascii() {
 
 #[test]
 fn can_calculate_offsides_after_a_line_with_nonascii() {
-    let line1 = format!(r#"f x y@"!©α€"{}"#, "\n");
+    let line1 = format!(r#"f x y@"{}"{}"#, "!©α€", "\n");
     let line2 = format!(r#"  | x == y    = Just (x ++ y){}"#, "\n");
     let line3 = format!(r#"  | otherwise = Nothing{}"#, "\n");
 
-    let mut offside = Offside::new();
+    let mut offside = OffsideBy::new();
 
     let target = ScanUnit::Operator(Operator('|'));
-    let absolute1 = writeln_target_abs(&mut offside, &line1, |su| su == &target);
-    let absolute2 = writeln_target_abs(&mut offside, &line2, |su| su == &target);
-    let absolute3 = writeln_target_abs(&mut offside, &line3, |su| su == &target);
+    let absolute1 = write_target_abs(&mut offside, &line1, |su| su == &target);
+    let absolute2 = write_target_abs(&mut offside, &line2, |su| su == &target);
+    let absolute3 = write_target_abs(&mut offside, &line3, |su| su == &target);
 
     assert!(absolute1.is_none());
     assert!(absolute2.is_some());
@@ -249,21 +249,21 @@ fn can_calculate_offsides_even_with_elastic_tabs() {
     let line1 = format!(r#"f x y@"{}" | x == y    = Just (x ++ y){}"#, "\t", "\n");
     let line2 = format!(r#"       {}  | otherwise = Nothing"#, "\t");
 
-    let mut offside = Offside::new();
+    let mut offside = OffsideBy::new();
 
     let target = ScanUnit::Operator(Operator('|'));
-    let absolute1 = writeln_target_abs(&mut offside, &line1, |su| su == &target).unwrap();
-    let absolute2 = writeln_target_abs(&mut offside, &line2, |su| su == &target).unwrap();
+    let absolute1 = write_target_abs(&mut offside, &line1, |su| su == &target).unwrap();
+    let absolute2 = write_target_abs(&mut offside, &line2, |su| su == &target).unwrap();
 
     assert_eq!(absolute1, absolute2);
 }
 
 #[test]
 fn partial_ord_sanity() {
-    let mut offside = Offside::new();
+    let mut offside = OffsideBy::new();
 
-    let absolute1 = writeln_abs(&mut offside, "  \t\t");
-    let absolute2 = writeln_abs(&mut offside, "  ");
+    let absolute1 = write_abs(&mut offside, "  \t\t");
+    let absolute2 = write_abs(&mut offside, "  ");
 
     assert!(absolute1.is_less_indented_than(&absolute2));
     assert!(!absolute1.is_aligned_with(&absolute2));

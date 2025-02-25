@@ -265,13 +265,12 @@
 //! ```
 
 use std::cmp::Ordering;
-
-use crate::syn::cursor::ScanUnit;
+use std::marker::PhantomData;
 
 mod tests;
 
 #[derive(Debug)]
-pub struct Offside {
+pub struct OffsideBy<T> {
     /// When the line contains a non-ASCII character, then the offside rule
     /// cannot be applied to that line.
     nonascii: bool,
@@ -279,6 +278,18 @@ pub struct Offside {
     /// when `nonascii` is set to true. Always check with `nonascii` field
     /// first!
     absolute: Absolute,
+    marker: PhantomData<T>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Measured {
+    Retract,
+    Monospace(u16),
+    Elastic(u16),
+}
+
+pub trait OffsideTape {
+    fn measure(&self) -> Option<Measured>;
 }
 
 /// Relative offside is a specific column tracking the width-wise length of a
@@ -291,8 +302,8 @@ pub struct Offside {
 /// ```
 /// Such that we get the following data:
 /// ```rs
-/// Relative { monospace: 9, elastic: 1 } // 1
-/// Relative { monospace: 8, elastic: 0 } // 2
+/// Relative { monospace: 9, elastic: 1 } // (1)
+/// Relative { monospace: 8, elastic: 0 } // (2)
 /// ```
 ///
 /// This is emitted on a per token basis.
@@ -319,11 +330,11 @@ enum AbsoluteOffside {
     Heap(Vec<Relative>),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Indentation {
-    Dedented,
-    Aligned,
-    Indented,
+    Dedented = -1,
+    Aligned = 0,
+    Indented = 1,
 }
 
 /// Why not [`PartialOrd`]? Because [`Option<T>`] where `T: PartialOrd` returns
@@ -345,8 +356,8 @@ pub enum Indentation {
 /// # use std::cmp::Ordering;
 /// # use peregrine::syn::offside::*;
 /// # use peregrine::syn::cursor::*;
-/// # let mut offside = Offside::new();
-/// # offside.push_scan_unit(ScanUnit::Digit(Digit::Zero));
+/// # let mut offside = OffsideBy::new();
+/// # offside.add(&ScanUnit::Digit(Digit::Zero));
 /// # #[derive(PartialEq)]
 /// # struct FakeOrd<T>(T);
 /// # impl<T: PartialOffsideOrd> PartialOffsideOrd for FakeOrd<T> {
@@ -356,7 +367,7 @@ pub enum Indentation {
 /// # }
 /// # impl<T: PartialOffsideOrd + PartialEq> PartialOrd for FakeOrd<T> {
 /// #    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-/// #       self.partial_cmp_offside(&other).map(|ord| match ord {
+/// #       self.partial_cmp_offside(other).map(|ord| match ord {
 /// #         Indentation::Dedented => Ordering::Less,
 /// #         Indentation::Aligned => Ordering::Equal,
 /// #         Indentation::Indented => Ordering::Greater,
@@ -368,7 +379,7 @@ pub enum Indentation {
 /// #   fn deref(&self) -> &Self::Target { &self.0 }
 /// # }
 /// let lhs = None;
-/// let rhs = offside.absolute_offside();
+/// let rhs = offside.absolute();
 /// # let rhs = rhs.map(FakeOrd);
 ///
 /// assert_eq!(lhs < rhs, true); // Unfortunate.
@@ -398,15 +409,15 @@ pub trait PartialOffsideOrd<Rhs: ?Sized = Self> {
     fn partial_cmp_offside(&self, other: &Rhs) -> Option<Indentation>;
 
     fn is_less_indented_than(&self, other: &Rhs) -> bool {
-        matches!(self.partial_cmp_offside(other), Some(Indentation::Dedented))
+        self.partial_cmp_offside(other) == Some(Indentation::Dedented)
     }
 
     fn is_aligned_with(&self, other: &Rhs) -> bool {
-        matches!(self.partial_cmp_offside(other), Some(Indentation::Aligned))
+        self.partial_cmp_offside(other) == Some(Indentation::Aligned)
     }
 
     fn is_more_indented_than(&self, other: &Rhs) -> bool {
-        matches!(self.partial_cmp_offside(other), Some(Indentation::Indented))
+        self.partial_cmp_offside(other) == Some(Indentation::Indented)
     }
 }
 
@@ -417,116 +428,52 @@ pub trait OffsideOrd: PartialOffsideOrd {
     fn cmp_offside(&self, other: &Self) -> Indentation;
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum Width {
-    Monospace,
-    Elastic,
-}
-
-impl Offside {
-    pub fn new() -> Offside {
-        Offside {
+impl<T> OffsideBy<T> {
+    pub fn new() -> OffsideBy<T> {
+        OffsideBy {
             nonascii: false,
             absolute: Absolute::new(),
+            marker: PhantomData,
         }
     }
 
-    pub fn absolute_offside(&self) -> Option<Absolute> {
+    pub fn absolute(&self) -> Option<&Absolute> {
         if self.nonascii {
             return None;
         }
 
-        Some(self.absolute.clone())
+        Some(&self.absolute)
     }
 
-    pub fn push_scan_unit(&mut self, scan_unit: ScanUnit) {
-        match scan_unit {
-            ScanUnit::Newline(_) => {
-                self.nonascii = false;
-                self.absolute.reset();
+    pub fn add(&mut self, value: &T)
+    where
+        T: OffsideTape,
+    {
+        match value.measure() {
+            Some(Measured::Monospace(count)) if !self.nonascii => {
+                self.absolute.add_monospace(count)
             }
-            ScanUnit::Unknown(u) if !u.is_ascii() => {
-                self.nonascii = true;
-                self.absolute.reset();
+            Some(Measured::Elastic(count)) if !self.nonascii => {
+                self.absolute.add_elastic(count);
             }
-            _ if self.nonascii => return,
-            _ => match scan_unit.char_len() {
-                Some(_) => self.absolute.push(Width::Monospace),
-                None => self.absolute.push(Width::Elastic),
-            },
+            acc @ (Some(Measured::Retract) | None) => {
+                self.nonascii = acc.is_none();
+                self.absolute.clear();
+            }
+            _ => (),
         }
     }
 }
 
 impl Relative {
-    fn new(width: Width) -> Relative {
-        let (monospace, elastic) = match width {
-            Width::Monospace => (1, 0),
-            Width::Elastic => (0, 1),
-        };
-
+    fn new(monospace: u16, elastic: u16) -> Relative {
         Relative { monospace, elastic }
-    }
-
-    fn add(self, width: Width) -> Option<Relative> {
-        let res = match width {
-            Width::Monospace if self.elastic == 0 => Some((1, 0)),
-            Width::Monospace => None,
-            Width::Elastic => Some((0, 1)),
-        };
-
-        Some(Relative {
-            monospace: self.monospace + res?.0,
-            elastic: self.elastic + res?.1,
-        })
     }
 }
 
 impl Absolute {
     pub fn new() -> Absolute {
         Absolute(AbsoluteOffside::Zero)
-    }
-
-    fn push(&mut self, width: Width) {
-        use AbsoluteOffside::*;
-
-        // Cluster as much as possible into a single offside rule.
-        //
-        // If we have a Width::Monospace:
-        // 1. If the last offside rule is not elastic, then we increment the
-        //    monospaced integer in the offside.
-        // 2. Otherwise we push a new offside rule with monospaced set to 1.
-        //
-        // If we have a Width::Elastic, then simply increment the elastic
-        // integer in the offside. This alone is enough to cause a new entry in
-        // the stack if the next width is monospaced.
-        //
-        // This means we efficiently pack the count of monospaced and elastic
-        // bytes.
-
-        if let Some(last) = self.last_mut() {
-            if let Some(added) = last.add(width) {
-                *last = added;
-                return;
-            }
-        }
-
-        let last = Relative::new(width);
-        match self.0 {
-            Zero => self.0 = One([last]),
-            One([r1]) => self.0 = Two([r1, last]),
-            Two([r1, r2]) => self.0 = Three([r1, r2, last]),
-            Three([r1, r2, r3]) => self.0 = Heap(Vec::from([r1, r2, r3, last])),
-            Heap(ref mut relatives) => relatives.push(last),
-        }
-    }
-
-    pub fn reset(&mut self) {
-        match self.0 {
-            // Once in Heap, we never go back lest we lose the memory buffer.
-            AbsoluteOffside::Heap(ref mut relatives) => relatives.clear(),
-            _ => self.0 = AbsoluteOffside::Zero,
-        }
     }
 
     pub fn as_slice(&self) -> &[Relative] {
@@ -549,8 +496,41 @@ impl Absolute {
         }
     }
 
-    fn last_mut(&mut self) -> Option<&mut Relative> {
+    pub fn last_mut(&mut self) -> Option<&mut Relative> {
         self.as_mut_slice().last_mut()
+    }
+
+    fn add_monospace(&mut self, count: u16) {
+        match self.last_mut() {
+            Some(offside) if offside.elastic == 0 => offside.monospace += count,
+            _ => self.push(Relative::new(count, 0)),
+        }
+    }
+
+    fn add_elastic(&mut self, count: u16) {
+        match self.last_mut() {
+            Some(offside) => offside.elastic += count,
+            _ => self.push(Relative::new(0, count)),
+        }
+    }
+
+    fn clear(&mut self) {
+        match self.0 {
+            // Once in Heap, we never go back lest we lose the memory buffer.
+            AbsoluteOffside::Heap(ref mut relatives) => relatives.clear(),
+            _ => self.0 = AbsoluteOffside::Zero,
+        }
+    }
+
+    fn push(&mut self, relative: Relative) {
+        use AbsoluteOffside::*;
+        match self.0 {
+            Zero => self.0 = One([relative]),
+            One([r1]) => self.0 = Two([r1, relative]),
+            Two([r1, r2]) => self.0 = Three([r1, r2, relative]),
+            Three([r1, r2, r3]) => self.0 = Heap(vec![r1, r2, r3, relative]),
+            Heap(ref mut relatives) => relatives.push(relative),
+        }
     }
 }
 
@@ -561,7 +541,6 @@ impl Clone for AbsoluteOffside {
             Self::One(rs) => Self::One(rs.clone()),
             Self::Two(rs) => Self::Two(rs.clone()),
             Self::Three(rs) => Self::Three(rs.clone()),
-            // I'm not sorry for the crime against humanity here.
             Self::Heap(vec) if vec.is_empty() => Self::Zero,
             Self::Heap(vec) if vec.len() == 1 => Self::One([vec[0]]),
             Self::Heap(vec) if vec.len() == 2 => Self::Two([vec[0], vec[1]]),
@@ -572,27 +551,48 @@ impl Clone for AbsoluteOffside {
 }
 
 impl Indentation {
-    pub fn then(self, other: Indentation) -> Indentation {
+    /// Indentation forms a hierarchy, hence if you call [`Indentation::then`]
+    /// where `self` is [`Indentation::Dedented`] or [`Indentation::Indented`],
+    /// it will return [`None`] because at that point we've lost the hierarchy.
+    pub fn then(self, other: Indentation) -> Option<Indentation> {
+        self.and_then(Some(other))
+    }
+
+    /// Indentation forms a hierarchy, hence if you call [`Indentation::then`]
+    /// where `self` is [`Indentation::Dedented`] or [`Indentation::Indented`],
+    /// it will return [`None`] because at that point we've lost the hierarchy.
+    pub fn and_then(self, other: Option<Indentation>) -> Option<Indentation> {
         match self {
+            Indentation::Dedented => None,
             Indentation::Aligned => other,
-            _ => self,
+            Indentation::Indented => None,
         }
     }
 
-    pub fn then_with<F: FnOnce() -> Indentation>(self, f: F) -> Indentation {
+    pub fn then_with<F: FnOnce() -> Indentation>(self, f: F) -> Option<Indentation> {
         self.then(f())
     }
-}
 
-impl PartialOffsideOrd for Indentation {
-    fn partial_cmp_offside(&self, other: &Self) -> Option<Indentation> {
-        Some(self.then(*other))
+    pub fn and_then_with<F: FnOnce() -> Option<Indentation>>(self, f: F) -> Option<Indentation> {
+        self.and_then(f())
+    }
+
+    pub fn from_ord(ordering: Ordering) -> Indentation {
+        Indentation::from(ordering)
+    }
+
+    pub fn into_ord(self) -> Ordering {
+        Ordering::from(self)
     }
 }
 
-impl OffsideOrd for Indentation {
-    fn cmp_offside(&self, other: &Self) -> Indentation {
-        self.then(*other)
+impl<T> PartialOffsideOrd for OffsideBy<T> {
+    fn partial_cmp_offside(&self, other: &Self) -> Option<Indentation> {
+        if !self.nonascii && !other.nonascii {
+            self.absolute.partial_cmp_offside(&other.absolute)
+        } else {
+            None
+        }
     }
 }
 
@@ -606,65 +606,84 @@ impl OffsideOrd for Relative {
     fn cmp_offside(&self, other: &Self) -> Indentation {
         let mono_ord = self.monospace.cmp(&other.monospace);
         let elastic_ord = self.elastic.cmp(&other.elastic);
-
-        match mono_ord.then(elastic_ord) {
-            Ordering::Less => Indentation::Dedented,
-            Ordering::Equal => Indentation::Aligned,
-            Ordering::Greater => Indentation::Indented,
-        }
+        Indentation::from_ord(mono_ord.then(elastic_ord))
     }
 }
 
 impl PartialOffsideOrd for Absolute {
     fn partial_cmp_offside(&self, other: &Self) -> Option<Indentation> {
-        self.as_slice().partial_cmp_offside(&other.as_slice())
+        PartialOffsideOrd::partial_cmp_offside(&self.as_slice(), &other.as_slice())
     }
 }
 
-impl<T: PartialOffsideOrd> PartialOffsideOrd for Option<T> {
+impl PartialOffsideOrd for Indentation {
     fn partial_cmp_offside(&self, other: &Self) -> Option<Indentation> {
-        match (self, other) {
-            (Some(lhs), Some(rhs)) => lhs.partial_cmp_offside(rhs),
-            (_, _) => None, // The reason for this entire trait!
-        }
-    }
-}
-
-impl<T: PartialOffsideOrd> PartialOffsideOrd for Vec<T> {
-    fn partial_cmp_offside(&self, other: &Self) -> Option<Indentation> {
-        self.as_slice().partial_cmp_offside(&other.as_slice())
+        self.and_then(Some(*other))
     }
 }
 
 impl<T: PartialOffsideOrd> PartialOffsideOrd for &[T] {
     fn partial_cmp_offside(&self, other: &Self) -> Option<Indentation> {
-        let mut iter = self.iter().zip(other.iter());
-        let last = iter
-            .next_back()
-            .and_then(|(lhs, rhs)| lhs.partial_cmp_offside(rhs));
+        self.iter()
+            .zip(other.iter())
+            .map(|(lhs, rhs)| lhs.partial_cmp_offside(rhs))
+            .try_fold(Indentation::Aligned, Indentation::and_then)?
+            .then(Indentation::from_ord(self.len().cmp(&other.len())))
+    }
+}
 
-        if iter.any(|(lhs, rhs)| !lhs.is_aligned_with(rhs)) {
-            return None;
+impl<T: PartialOffsideOrd> PartialOffsideOrd for Vec<T> {
+    fn partial_cmp_offside(&self, other: &Self) -> Option<Indentation> {
+        PartialOffsideOrd::partial_cmp_offside(&self.as_slice(), &other.as_slice())
+    }
+}
+
+impl<T, Rhs> PartialOffsideOrd<Option<Rhs>> for Option<T>
+where
+    T: PartialOffsideOrd<Rhs>,
+{
+    fn partial_cmp_offside(&self, other: &Option<Rhs>) -> Option<Indentation> {
+        match (self, other) {
+            (Some(lhs), Some(rhs)) => lhs.partial_cmp_offside(&rhs),
+            (_, _) => None,
         }
+    }
+}
 
-        let implied_indent = match self.len().cmp(&other.len()) {
+impl<T: ?Sized, Rhs: ?Sized> PartialOffsideOrd<&Rhs> for &T
+where
+    T: PartialOffsideOrd<Rhs>,
+{
+    fn partial_cmp_offside(&self, other: &&Rhs) -> Option<Indentation> {
+        PartialOffsideOrd::partial_cmp_offside(&**self, &*other)
+    }
+}
+
+impl<T: ?Sized, Rhs: ?Sized> PartialOffsideOrd<&mut Rhs> for &mut T
+where
+    T: PartialOffsideOrd<Rhs>,
+{
+    fn partial_cmp_offside(&self, other: &&mut Rhs) -> Option<Indentation> {
+        PartialOffsideOrd::partial_cmp_offside(&**self, &*other)
+    }
+}
+
+impl From<Ordering> for Indentation {
+    fn from(value: Ordering) -> Self {
+        match value {
             Ordering::Less => Indentation::Dedented,
             Ordering::Equal => Indentation::Aligned,
             Ordering::Greater => Indentation::Indented,
-        };
-
-        last.partial_cmp_offside(&Some(implied_indent))
+        }
     }
 }
 
-impl<T: PartialOffsideOrd> PartialOffsideOrd for &T {
-    fn partial_cmp_offside(&self, other: &Self) -> Option<Indentation> {
-        (*self).partial_cmp_offside(*other)
-    }
-}
-
-impl<T: PartialOffsideOrd> PartialOffsideOrd for &mut T {
-    fn partial_cmp_offside(&self, other: &Self) -> Option<Indentation> {
-        (&**self).partial_cmp_offside(&**other)
+impl From<Indentation> for Ordering {
+    fn from(value: Indentation) -> Self {
+        match value {
+            Indentation::Dedented => Ordering::Less,
+            Indentation::Aligned => Ordering::Equal,
+            Indentation::Indented => Ordering::Greater,
+        }
     }
 }

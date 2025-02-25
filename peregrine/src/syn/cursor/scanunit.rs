@@ -1,4 +1,6 @@
-#[derive(Debug, PartialEq, Eq, Clone)]
+use crate::syn::offside::{Measured, OffsideTape};
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ScanUnit {
     Alpha(Alpha),
     Digit(Digit),
@@ -98,11 +100,29 @@ impl ScanUnit {
             ScanUnit::Eof => Some(0),
         }
     }
+
+    pub fn is_ascii(self) -> bool {
+        match self {
+            ScanUnit::Alpha(alpha) => alpha.is_ascii(),
+            ScanUnit::Digit(digit) => digit.is_ascii(),
+            ScanUnit::Quot(quotation) => quotation.is_ascii(),
+            ScanUnit::Operator(operator) => operator.is_ascii(),
+            ScanUnit::Delimiter(delimiter) => delimiter.is_ascii(),
+            ScanUnit::Space(space) => space.is_ascii(),
+            ScanUnit::Newline(newline) => newline.is_ascii(),
+            ScanUnit::Unknown(unknown) => unknown.is_ascii(),
+            ScanUnit::Eof => true,
+        }
+    }
 }
 
 impl Alpha {
     pub fn len(self) -> usize {
         self.0.len_utf8()
+    }
+
+    pub fn is_ascii(self) -> bool {
+        true
     }
 }
 
@@ -141,6 +161,10 @@ impl Digit {
     pub fn len(self) -> usize {
         self.as_char().len_utf8()
     }
+
+    pub fn is_ascii(self) -> bool {
+        true
+    }
 }
 
 impl Quotation {
@@ -162,11 +186,19 @@ impl Quotation {
     pub fn len(self) -> usize {
         self.as_char().len_utf8()
     }
+
+    pub fn is_ascii(self) -> bool {
+        true
+    }
 }
 
 impl Operator {
     pub fn len(self) -> usize {
         self.0.len_utf8()
+    }
+
+    pub fn is_ascii(self) -> bool {
+        true
     }
 }
 
@@ -201,6 +233,10 @@ impl Delimiter {
     pub fn len(self) -> usize {
         self.as_char().len_utf8()
     }
+
+    pub fn is_ascii(self) -> bool {
+        true
+    }
 }
 
 impl Space {
@@ -222,6 +258,10 @@ impl Space {
     pub fn len(self) -> usize {
         self.as_char().len_utf8()
     }
+
+    pub fn is_ascii(self) -> bool {
+        true
+    }
 }
 
 impl Newline {
@@ -232,6 +272,10 @@ impl Newline {
             Newline::CRLF => 2,
         }
     }
+
+    pub fn is_ascii(self) -> bool {
+        true
+    }
 }
 
 impl Unknown {
@@ -241,5 +285,72 @@ impl Unknown {
 
     pub fn is_ascii(self) -> bool {
         self.0.is_ascii()
+    }
+}
+
+impl OffsideTape for ScanUnit {
+    fn measure(&self) -> Option<Measured> {
+        match self {
+            ScanUnit::Alpha(alpha) => alpha.measure(),
+            ScanUnit::Digit(digit) => digit.measure(),
+            ScanUnit::Quot(quotation) => quotation.measure(),
+            ScanUnit::Operator(operator) => operator.measure(),
+            ScanUnit::Delimiter(delimiter) => delimiter.measure(),
+            ScanUnit::Space(space) => space.measure(),
+            ScanUnit::Newline(newline) => newline.measure(),
+            ScanUnit::Unknown(unknown) => unknown.measure(),
+            ScanUnit::Eof => Some(Measured::Monospace(0)),
+        }
+    }
+}
+
+impl OffsideTape for Alpha {
+    fn measure(&self) -> Option<Measured> {
+        Some(Measured::Monospace(1))
+    }
+}
+
+impl OffsideTape for Digit {
+    fn measure(&self) -> Option<Measured> {
+        Some(Measured::Monospace(1))
+    }
+}
+
+impl OffsideTape for Quotation {
+    fn measure(&self) -> Option<Measured> {
+        Some(Measured::Monospace(1))
+    }
+}
+
+impl OffsideTape for Operator {
+    fn measure(&self) -> Option<Measured> {
+        Some(Measured::Monospace(1))
+    }
+}
+
+impl OffsideTape for Delimiter {
+    fn measure(&self) -> Option<Measured> {
+        Some(Measured::Monospace(1))
+    }
+}
+
+impl OffsideTape for Space {
+    fn measure(&self) -> Option<Measured> {
+        match self {
+            Space::Space => Some(Measured::Monospace(1)),
+            Space::Tab => Some(Measured::Elastic(1)),
+        }
+    }
+}
+
+impl OffsideTape for Newline {
+    fn measure(&self) -> Option<Measured> {
+        Some(Measured::Retract)
+    }
+}
+
+impl OffsideTape for Unknown {
+    fn measure(&self) -> Option<Measured> {
+        self.0.is_ascii().then_some(Measured::Monospace(1))
     }
 }

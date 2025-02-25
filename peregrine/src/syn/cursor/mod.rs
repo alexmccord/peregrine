@@ -38,9 +38,13 @@ impl Cursor {
             .chars()
     }
 
-    pub fn get(&self) -> ScanUnit {
+    pub fn skip_mut(&mut self, n: usize) {
+        self.byte_offset += n;
+    }
+
+    pub fn peek(&self, peek_offset: usize) -> ScanUnit {
         // The guts of the parser. Smelly as hell, in the sewers it belongs.
-        let mut chars = self.chars();
+        let mut chars = self.chars().skip(peek_offset);
 
         match chars.next() {
             None => ScanUnit::Eof,
@@ -68,6 +72,10 @@ impl Cursor {
                 }
             }
         }
+    }
+
+    pub fn get(&self) -> ScanUnit {
+        self.peek(0)
     }
 }
 

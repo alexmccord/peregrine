@@ -2,11 +2,11 @@
 use super::*;
 use crate::syn;
 
-fn assert_ws<'a, T, I: Iterator<Item = (T, &'a TokenKind)>>(iter: &mut I, ws: Ws) {
+fn assert_ws<'a, I: Iterator<Item = (T, &'a TokenKind)>, T>(iter: &mut I, ws: Ws) {
     assert_eq!(iter.next().map(|(_, tok)| tok), Some(&TokenKind::Ws(ws)));
 }
 
-fn assert_eof<'a, T, I: Iterator<Item = (T, &'a TokenKind)>>(iter: &mut I) {
+fn assert_eof<'a, I: Iterator<Item = (T, &'a TokenKind)>, T>(iter: &mut I) {
     assert_eq!(iter.next().map(|(_, tok)| tok), Some(&TokenKind::Eof));
     assert_eq!(iter.next().map(|(_, tok)| tok), None);
 }
@@ -22,7 +22,7 @@ fn scan_unknown() {
         iter.next(),
         Some((
             (Position::new(1, 0), Position::new(1, 3)),
-            &TokenKind::Unknown("@@@".into()),
+            &TokenKind::Unknown(Unknown::new("@@@".to_string(), false)),
         ))
     );
 
@@ -39,10 +39,10 @@ fn scan_kw() {
         ("open", Keyword::Open),
         ("hiding", Keyword::Hiding),
         ("renaming", Keyword::Renaming),
-        ("struct", Keyword::Struct),
+        ("record", Keyword::Record),
         ("data", Keyword::Data),
-        ("class", Keyword::Class),
-        ("instance", Keyword::Instance),
+        ("trait", Keyword::Trait),
+        ("impl", Keyword::Impl),
         ("deriving", Keyword::Deriving),
         ("where", Keyword::Where),
         ("let", Keyword::Let),
@@ -119,19 +119,21 @@ fn scan_strings() {
         .iter()
         .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
 
+    let abc_str = ByteString::from_quot(Quotation::Double, r#""abc""#, false);
     assert_eq!(
         iter.next(),
         Some((
             (Position::new(1, 0), Position::new(1, 5)),
-            &TokenKind::ByteString(ByteString::from_quot(Quotation::Double, r#""abc""#)),
+            &TokenKind::ByteString(abc_str),
         ))
     );
 
+    let def_str = ByteString::from_quot(Quotation::Double, r#""def\"""#, false);
     assert_eq!(
         iter.next(),
         Some((
             (Position::new(1, 5), Position::new(1, 12)),
-            &TokenKind::ByteString(ByteString::from_quot(Quotation::Double, r#""def\"""#)),
+            &TokenKind::ByteString(def_str),
         ))
     );
 
@@ -145,11 +147,12 @@ fn scan_empty_string() {
         .iter()
         .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
 
+    let empty_str = ByteString::from_quot(Quotation::Double, r#""""#, false);
     assert_eq!(
         iter.next(),
         Some((
             (Position::new(1, 0), Position::new(1, 2)),
-            &TokenKind::ByteString(ByteString::from_quot(Quotation::Double, r#""""#)),
+            &TokenKind::ByteString(empty_str),
         ))
     );
 
@@ -167,11 +170,59 @@ fn scan_erroneous_strings() {
         iter.next(),
         Some((
             (Position::new(1, 0), Position::new(1, 4)),
-            &TokenKind::Unknown(r#""abc"#.to_string()),
+            &TokenKind::Unknown(Unknown::new(r#""abc"#.to_string(), false)),
         ))
     );
 
     assert_eof(&mut iter);
+}
+
+#[test]
+fn legal_escape_sequences() {
+    let tokens = syn::tokenize(r#""\'\r\n\t\s""#);
+    let mut iter = tokens
+        .iter()
+        .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
+
+    let str1 = ByteString::new_bytestring(r#""\'\r\n\t\s""#.to_string(), false);
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 0), Position::new(1, 12)),
+            &TokenKind::ByteString(str1),
+        ))
+    );
+
+    assert_eof(&mut iter);
+}
+
+#[test]
+fn illegal_escape_sequences() {
+    let tokens = syn::tokenize(r#""ab\c""#);
+    let mut iter = tokens
+        .iter()
+        .map(|(id, tok)| (tokens.get_pos(id), tok.kind()));
+
+    assert_eq!(
+        iter.next(),
+        Some((
+            (Position::new(1, 0), Position::new(1, 6)),
+            &TokenKind::Unknown(Unknown::new(r#""ab\c""#.to_string(), false)),
+        ))
+    );
+
+    assert_eof(&mut iter);
+}
+
+#[test]
+fn strings_with_hard_tabs_are_whitespace_insigificant() {
+    let tokens = syn::tokenize(format!(r#""{}""#, "\t"));
+    let mut iter = tokens.values();
+
+    assert!(iter.next().is_some_and(|tok| match tok.kind() {
+        TokenKind::ByteString(byte_string) => byte_string.is_whitespace_insignificant(),
+        _ => false,
+    }))
 }
 
 #[test]
@@ -185,7 +236,7 @@ fn identifiers_dont_start_with_digits() {
         iter.next(),
         Some((
             (Position::new(1, 0), Position::new(1, 4)),
-            &TokenKind::Unknown("1abc".to_string()),
+            &TokenKind::Unknown(Unknown::new("1abc".to_string(), false)),
         ))
     );
 
@@ -289,7 +340,7 @@ fn scan_operators() {
         iter.next(),
         Some((
             (Position::new(1, 14), Position::new(1, 15)),
-            &TokenKind::Group(Group::Paren(Parity::Opened)),
+            &TokenKind::Group(Group::Paren(Parity::Open)),
         ))
     );
 

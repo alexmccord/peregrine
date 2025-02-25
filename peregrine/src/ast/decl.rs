@@ -26,26 +26,27 @@ pub enum DeclKind {
     Public(Public),
     // open <decl>
     Open(Open),
-    // struct Foo where
+    // record Foo where
     //   a : A
     //   b : B
-    Struct(Struct),
+    Record(Record),
     // data Vec n a where
     //   []   : Vec 0 a
     //   (::) : a -> Vec n a -> Vec (n + 1) a
     Data(Data),
-    // class Functor f where
-    //   let map : (a -> b) -> f a -> f b
-    Class(Class),
-    // instance Functor Maybe where
-    //   let map f = function
-    //     | Just x  -> Just (f x)
-    //     | Nothing -> Nothing
-    Instance(Instance),
-    // let e : T
-    // let e = x
-    Let(Let),
-    // In REPL mode only:
+    // trait Functor f where
+    //   map : (a -> b) -> f a -> f b
+    Trait(Trait),
+    // impl Functor Maybe where
+    //   map f = function
+    //     Just x  -> Just (f x)
+    //     Nothing -> Nothing
+    Impl(Impl),
+    // e : T
+    Sig(Sig),
+    // e1 = e2
+    Equation(Equation),
+    // In REPL mode only.
     Expr(Expr),
     Error(Option<DeclId>),
 }
@@ -64,7 +65,7 @@ pub enum PathNode {
 #[derive(Debug)]
 pub struct Module {
     path: Option<Path>,
-    decls: Vec<Decl>,
+    decls: Option<Vec<Decl>>,
 }
 
 #[derive(Debug)]
@@ -82,17 +83,17 @@ pub struct Public(pub(crate) Box<Decl>);
 pub struct Open(pub(crate) Box<Decl>);
 
 #[derive(Debug)]
-pub struct Struct(pub(crate) Expr, pub(crate) Vec<Expr>);
+pub struct Record(pub(crate) Expr, pub(crate) Vec<Expr>);
 
 #[derive(Debug)]
 pub struct Data(
     pub(crate) Expr,
-    pub(crate) DataCons,
+    pub(crate) EnumKind,
     pub(crate) Option<Deriving>,
 );
 
 #[derive(Debug)]
-pub enum DataCons {
+pub enum EnumKind {
     NoCons,
     Equals(Expr),
     Where(Vec<Expr>),
@@ -102,72 +103,16 @@ pub enum DataCons {
 pub struct Deriving(pub Expr);
 
 #[derive(Debug)]
-pub struct Class(pub(crate) Expr, pub(crate) Vec<Expr>);
+pub struct Trait(pub(crate) Expr, pub(crate) Vec<Expr>);
 
 #[derive(Debug)]
-pub struct Instance(pub(crate) Expr, pub(crate) Vec<Expr>);
+pub struct Impl(pub(crate) Expr, pub(crate) Vec<Expr>);
 
-// TODO: Rework top-level `let`.
-//
-// Originally, I was thinking to have OCaml style `let` but ran into some annoyances
-// where `=` is ambiguous in some cases such as:
-//
-// let plus_comm : (x : Nat) -> (y : Nat) -> x + y = y + x = Refl
-//
-// The problem there is, how do you determine if `Refl` is:
-// 1. the result of `plus_comm` where applying `plus_comm` gives the proof `Refl`?
-// 2. a transitive equality, similar to `g . f = id = f . g`?
-//
-// So I decided to go with the Haskell syntax, after all:
-//
-// plus_comm : (x : Nat) -> (y : Nat) -> x + y = y + x
-// plus_comm = Refl
-//
-// Am I saddened by it? A bit, yes. But also, not really. I've realized that the
-// `let` spam would get annoying fast in a functional programming language, so...
-// it's a net win, I guess. Consider the alternatives.
-//
-// 1) Keep the `let` but split it across lines.
-//    let plus_comm : (x : Nat) -> (y : Nat) -> x + y = y + x
-//    let plus_comm = Refl
-//
-// 2) Keep the `let` and use layout rule:
-//    let plus_comm : (x : Nat) -> (y : Nat) -> x + y = y + x
-//        plus_comm = Refl
-//
-// 3) Overengineer it:
-//    pub let new : [Char] -> String where
-//      new []      = ""
-//      new (c::cs) = "{c}{new cs}"
-//
-// Neither is great and feels like the `let` is superfluous so I'm just going to
-// drop the `let` keyword. It does have implications for the module system in nonobvious
-// ways, so I'll take the time to reconsider things carefully. I was okay with this:
-//
-// pub let new : [Char] -> String =
-//   function
-//   | []      -> ""
-//   | (c::cs) -> "{c}{new cs}"
-//
-// But not this where the function name and the equations for them are out of alignment:
-//
-// pub new : [Char] -> String
-// new []      = ""
-// new (c::cs) = "{c}{new cs}"
-//
-// Even if you had `pub` on a line of its own.
-//
-// pub
-// new : [Char] -> String
-// new []      = ""
-// new (c::cs) = "{c}{new cs}"
-//
-// So, need to give the module system more thinking in the face of our new reality.
 #[derive(Debug)]
-pub enum Let {
-    Decl(Expr),
-    DeclExpr(Expr, Expr),
-}
+pub struct Sig(pub(crate) Expr, pub(crate) Expr);
+
+#[derive(Debug)]
+pub struct Equation(pub(crate) Expr, pub(crate) Expr);
 
 impl Decl {
     pub fn new(id: DeclId, kind: DeclKind, token_span: TokenSpan) -> Decl {
@@ -233,9 +178,9 @@ impl Decl {
         }
     }
 
-    pub fn as_struct(&self) -> Option<&Struct> {
+    pub fn as_record(&self) -> Option<&Record> {
         match self.kind() {
-            DeclKind::Struct(s) => Some(s),
+            DeclKind::Record(s) => Some(s),
             _ => None,
         }
     }
@@ -247,23 +192,30 @@ impl Decl {
         }
     }
 
-    pub fn as_class(&self) -> Option<&Class> {
+    pub fn as_trait(&self) -> Option<&Trait> {
         match self.kind() {
-            DeclKind::Class(c) => Some(c),
+            DeclKind::Trait(c) => Some(c),
             _ => None,
         }
     }
 
-    pub fn as_instance(&self) -> Option<&Instance> {
+    pub fn as_impl(&self) -> Option<&Impl> {
         match self.kind() {
-            DeclKind::Instance(i) => Some(i),
+            DeclKind::Impl(i) => Some(i),
             _ => None,
         }
     }
 
-    pub fn as_let(&self) -> Option<&Let> {
+    pub fn as_sig(&self) -> Option<&Sig> {
         match self.kind() {
-            DeclKind::Let(l) => Some(l),
+            DeclKind::Sig(sig) => Some(sig),
+            _ => None,
+        }
+    }
+
+    pub fn as_equation(&self) -> Option<&Equation> {
+        match self.kind() {
+            DeclKind::Equation(eq) => Some(eq),
             _ => None,
         }
     }
@@ -284,59 +236,63 @@ impl Decl {
 }
 
 impl DeclKind {
-    pub fn module(path: Option<Path>, decls: Vec<Decl>) -> DeclKind {
+    pub fn new_module(path: Option<Path>, decls: Option<Vec<Decl>>) -> DeclKind {
         DeclKind::Module(Module::new(path, decls))
     }
 
-    pub fn import(path: Path) -> DeclKind {
+    pub fn new_import(path: Path) -> DeclKind {
         DeclKind::Import(Import::new(path))
     }
 
-    pub fn export(decl: Decl) -> DeclKind {
+    pub fn new_export(decl: Decl) -> DeclKind {
         DeclKind::Export(Export::new(decl))
     }
 
-    pub fn public(decl: Decl) -> DeclKind {
+    pub fn new_public(decl: Decl) -> DeclKind {
         DeclKind::Public(Public::new(decl))
     }
-    pub fn open(decl: Decl) -> DeclKind {
+    pub fn new_open(decl: Decl) -> DeclKind {
         DeclKind::Open(Open::new(decl))
     }
 
-    pub fn structure(sig: Expr, fields: Vec<Expr>) -> DeclKind {
-        DeclKind::Struct(Struct::new(sig, fields))
+    pub fn new_record(sig: Expr, fields: Vec<Expr>) -> DeclKind {
+        DeclKind::Record(Record::new(sig, fields))
     }
 
-    pub fn data(sig: Expr, cons: DataCons, deriving: Option<Deriving>) -> DeclKind {
+    pub fn new_data(sig: Expr, cons: EnumKind, deriving: Option<Deriving>) -> DeclKind {
         DeclKind::Data(Data::new(sig, cons, deriving))
     }
 
-    pub fn empty(sig: Expr) -> DeclKind {
+    pub fn empty_data(sig: Expr) -> DeclKind {
         DeclKind::Data(Data::empty(sig))
     }
 
-    pub fn adt(sig: Expr, constructors: Expr, deriving: Option<Deriving>) -> DeclKind {
+    pub fn new_data_adt(sig: Expr, constructors: Expr, deriving: Option<Deriving>) -> DeclKind {
         DeclKind::Data(Data::adt(sig, constructors, deriving))
     }
 
-    pub fn gadt(sig: Expr, constructors: Vec<Expr>, deriving: Option<Deriving>) -> DeclKind {
+    pub fn new_data_gadt(
+        sig: Expr,
+        constructors: Vec<Expr>,
+        deriving: Option<Deriving>,
+    ) -> DeclKind {
         DeclKind::Data(Data::gadt(sig, constructors, deriving))
     }
 
-    pub fn class(sig: Expr, body: Vec<Expr>) -> DeclKind {
-        DeclKind::Class(Class::new(sig, body))
+    pub fn new_trait(sig: Expr, body: Vec<Expr>) -> DeclKind {
+        DeclKind::Trait(Trait::new(sig, body))
     }
 
-    pub fn instance(sig: Expr, body: Vec<Expr>) -> DeclKind {
-        DeclKind::Instance(Instance::new(sig, body))
+    pub fn new_impl(sig: Expr, body: Vec<Expr>) -> DeclKind {
+        DeclKind::Impl(Impl::new(sig, body))
     }
 
-    pub fn let_the_expr(the: Expr) -> DeclKind {
-        DeclKind::Let(Let::the_expr(the))
+    pub fn new_sig(sig: Expr, ty: Expr) -> DeclKind {
+        DeclKind::Sig(Sig::new(sig, ty))
     }
 
-    pub fn let_the_expr_be(the: Expr, be: Expr) -> DeclKind {
-        DeclKind::Let(Let::the_expr_be(the, be))
+    pub fn new_equation(pat: Expr, expr: Expr) -> DeclKind {
+        DeclKind::Equation(Equation::new(pat, expr))
     }
 
     pub fn expr(expr: Expr) -> DeclKind {
@@ -351,7 +307,7 @@ impl Path {
 }
 
 impl Module {
-    pub fn new(path: Option<Path>, decls: Vec<Decl>) -> Module {
+    pub fn new(path: Option<Path>, decls: Option<Vec<Decl>>) -> Module {
         Module { path, decls }
     }
 
@@ -359,8 +315,8 @@ impl Module {
         self.path.as_ref()
     }
 
-    pub fn decls(&self) -> &Vec<Decl> {
-        &self.decls
+    pub fn decls(&self) -> Option<&Vec<Decl>> {
+        self.decls.as_ref()
     }
 }
 
@@ -404,9 +360,9 @@ impl Open {
     }
 }
 
-impl Struct {
-    pub fn new(sig: Expr, fields: Vec<Expr>) -> Struct {
-        Struct(sig, fields)
+impl Record {
+    pub fn new(sig: Expr, fields: Vec<Expr>) -> Record {
+        Record(sig, fields)
     }
 
     pub fn sig(&self) -> &Expr {
@@ -419,27 +375,27 @@ impl Struct {
 }
 
 impl Data {
-    pub fn new(sig: Expr, cons: DataCons, deriving: Option<Deriving>) -> Data {
+    pub fn new(sig: Expr, cons: EnumKind, deriving: Option<Deriving>) -> Data {
         Data(sig, cons, deriving)
     }
 
     pub fn empty(sig: Expr) -> Data {
-        Data(sig, DataCons::NoCons, None)
+        Data(sig, EnumKind::NoCons, None)
     }
 
     pub fn adt(sig: Expr, constructors: Expr, deriving: Option<Deriving>) -> Data {
-        Data(sig, DataCons::Equals(constructors), deriving)
+        Data(sig, EnumKind::Equals(constructors), deriving)
     }
 
     pub fn gadt(sig: Expr, constructors: Vec<Expr>, deriving: Option<Deriving>) -> Data {
-        Data(sig, DataCons::Where(constructors), deriving)
+        Data(sig, EnumKind::Where(constructors), deriving)
     }
 
     pub fn sig(&self) -> &Expr {
         &self.0
     }
 
-    pub fn cons(&self) -> &DataCons {
+    pub fn kind(&self) -> &EnumKind {
         &self.1
     }
 
@@ -448,9 +404,9 @@ impl Data {
     }
 }
 
-impl Class {
-    pub fn new(sig: Expr, body: Vec<Expr>) -> Class {
-        Class(sig, body)
+impl Trait {
+    pub fn new(sig: Expr, body: Vec<Expr>) -> Trait {
+        Trait(sig, body)
     }
 
     pub fn sig(&self) -> &Expr {
@@ -462,9 +418,9 @@ impl Class {
     }
 }
 
-impl Instance {
-    pub fn new(sig: Expr, body: Vec<Expr>) -> Instance {
-        Instance(sig, body)
+impl Impl {
+    pub fn new(sig: Expr, body: Vec<Expr>) -> Impl {
+        Impl(sig, body)
     }
 
     pub fn sig(&self) -> &Expr {
@@ -476,26 +432,26 @@ impl Instance {
     }
 }
 
-impl Let {
-    pub fn the_expr(the: Expr) -> Let {
-        Let::Decl(the)
+impl Sig {
+    pub fn new(sig: Expr, expr: Expr) -> Sig {
+        Sig(sig, expr)
     }
 
-    pub fn the_expr_be(the: Expr, be: Expr) -> Let {
-        Let::DeclExpr(the, be)
+    pub fn sig(&self) -> &Expr {
+        &self.0
+    }
+}
+
+impl Equation {
+    pub fn new(lhs: Expr, rhs: Expr) -> Equation {
+        Equation(lhs, rhs)
     }
 
-    pub fn get_the_expr(&self) -> &Expr {
-        match self {
-            Let::Decl(the) => &the,
-            Let::DeclExpr(the, _) => &the,
-        }
+    pub fn function(&self) -> &Expr {
+        &self.0
     }
 
-    pub fn get_be_expr(&self) -> Option<&Expr> {
-        match self {
-            Let::Decl(_) => None,
-            Let::DeclExpr(_, be) => Some(&be),
-        }
+    pub fn expression(&self) -> &Expr {
+        &self.1
     }
 }

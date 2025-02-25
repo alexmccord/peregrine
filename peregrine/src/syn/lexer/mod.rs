@@ -1,24 +1,19 @@
 use crate::ast::Position;
-use crate::syn::cursor::{Cursor, Delimiter, Operator, Quotation, ScanUnit, Space};
-use crate::syn::offside::Offside;
+use crate::syn::cursor::{Alpha, Cursor, Delimiter, Operator, Quotation, ScanUnit, Space};
 
 pub mod tok;
 use tok::*;
 
-use super::offside::Absolute;
-
 mod tests;
 
-#[derive(Debug)]
-pub(crate) struct Lexer {
-    cursor: Cursor,
-    current_pos: Position,
-    offside: Offside,
+pub fn tokenize(input: impl Into<String>) -> TokenVec {
+    TokenVec::from_iter(Lexer::new(input))
 }
 
 #[derive(Debug)]
-pub struct TokenStream {
-    lexer: Lexer,
+pub struct Lexer {
+    cursor: Cursor,
+    current_pos: Position,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -45,7 +40,6 @@ impl Lexer {
         Lexer {
             cursor: Cursor::new(input),
             current_pos: Position::new(1, 0),
-            offside: Offside::new(),
         }
     }
 
@@ -54,33 +48,32 @@ impl Lexer {
     }
 
     fn advance_cursor(&mut self) {
-        if let Some(su) = self.cursor.next() {
-            self.current_pos = match su {
-                ScanUnit::Newline(_) => Position::new(self.current_pos.line() + 1, 0),
-                _ => self.current_pos.add(0, 1),
-            };
-
-            self.offside.push_scan_unit(su);
+        self.current_pos = match self.cursor.next() {
+            Some(ScanUnit::Newline(_)) => Position::new(self.current_pos.line() + 1, 0),
+            Some(_) => self.current_pos.add(0, 1),
+            None => return,
         }
     }
 
-    fn take_while<F>(&mut self, f: F) -> Result<(usize, usize), TokenKind>
+    fn take_while<F>(&mut self, f: F) -> (bool, Result<(usize, usize), TokenKind>)
     where
         F: Fn(ScanUnit) -> Scan,
     {
-        self.take_while_with((), |(), su| ((), f(su))).1
+        let ((), has_nonascii, result) = self.take_while_with((), |(), su| ((), f(su)));
+        (has_nonascii, result)
     }
 
     fn take_while_with<T, F>(
         &mut self,
         mut state: T,
         f: F,
-    ) -> (T, Result<(usize, usize), TokenKind>)
+    ) -> (T, bool, Result<(usize, usize), TokenKind>)
     where
         F: Fn(T, ScanUnit) -> (T, Scan),
     {
         let i = self.cursor.byte_offset();
         let mut ok = true;
+        let mut has_nonascii = false;
 
         // We call `self.advance_cursor()` here and now without the loop because
         // `self.next()` already checked what ScanUnit we have so we can skip that
@@ -89,7 +82,10 @@ impl Lexer {
         self.advance_cursor();
 
         loop {
-            let (s, res) = f(state, self.cursor.get());
+            let su = self.cursor.get();
+            let (s, res) = f(state, su);
+
+            has_nonascii |= !su.is_ascii();
             state = s;
 
             let command = match res {
@@ -111,47 +107,51 @@ impl Lexer {
                     if ok {
                         Ok((i, j))
                     } else {
-                        Err(TokenKind::Unknown(self.cursor.slice(i, j).to_string()))
+                        let str = self.cursor.slice(i, j).to_string();
+                        Err(TokenKind::Unknown(Unknown::new(str, has_nonascii)))
                     }
                 }
             };
 
-            return (state, result);
+            return (state, has_nonascii, result);
         }
     }
 
-    fn scan<F>(&mut self, f: F) -> Result<String, TokenKind>
+    fn scan<F>(&mut self, f: F) -> (bool, Result<String, TokenKind>)
     where
         F: Fn(ScanUnit) -> Scan,
     {
-        self.scan_with((), |(), su| ((), f(su))).1
+        let ((), has_nonascii, result) = self.scan_with((), |(), su| ((), f(su)));
+        (has_nonascii, result)
     }
 
-    fn scan_with<T, F>(&mut self, state: T, f: F) -> (T, Result<String, TokenKind>)
+    fn scan_with<T, F>(&mut self, state: T, f: F) -> (T, bool, Result<String, TokenKind>)
     where
         F: Fn(T, ScanUnit) -> (T, Scan),
     {
-        let (state, res) = self.take_while_with(state, f);
+        let (state, has_nonascii, result) = self.take_while_with(state, f);
 
-        match res {
-            Ok((i, j)) => (state, Ok(self.cursor.slice(i, j).to_string())),
-            Err(tok) => (state, Err(tok)),
+        match result {
+            Ok((i, j)) => (state, has_nonascii, Ok(self.cursor.slice(i, j).to_string())),
+            Err(tok) => (state, has_nonascii, Err(tok)),
         }
     }
 
     fn scan_unknown(&mut self) -> TokenKind {
         // We don't really _need_ for scan to return a Result
         // in this case, but... why duplicate logic? /shrug.
-        let res = self.scan(|c| match c {
+        let (has_nonascii, res) = self.scan(|c| match c {
             ScanUnit::Unknown(_) => Scan::Err(Cmd::Append),
             _ => Scan::Err(Cmd::Terminate),
         });
 
-        map_tok(res, |str| TokenKind::Unknown(str))
+        map_tok(res, |str| {
+            TokenKind::Unknown(Unknown::new(str, has_nonascii))
+        })
     }
 
     fn scan_identifier(&mut self) -> TokenKind {
-        let res = self.scan(|su| match su {
+        let (_, res) = self.scan(|su| match su {
             ScanUnit::Alpha(_) => Scan::Ok(Cmd::Append),
             ScanUnit::Digit(_) => Scan::Ok(Cmd::Append),
             ScanUnit::Quot(_) => Scan::Ok(Cmd::Append), // TODO: enforce it to be postfix?
@@ -170,7 +170,7 @@ impl Lexer {
     }
 
     fn scan_numeral(&mut self) -> TokenKind {
-        let res = self.scan(|su| match su {
+        let (_, res) = self.scan(|su| match su {
             ScanUnit::Alpha(_) => Scan::Err(Cmd::Append),
             ScanUnit::Digit(_) => Scan::Ok(Cmd::Append),
             ScanUnit::Quot(_) => Scan::Err(Cmd::Terminate),
@@ -186,38 +186,63 @@ impl Lexer {
     }
 
     fn scan_bytestring(&mut self, quot: Quotation) -> TokenKind {
-        #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-        enum State {
+        enum MachineState {
+            // Used to have `Escaped` to escape `\n` but decided to remove it. I
+            // realized it causes too many problems than it solves. Like, how
+            // should it interact with the layout parsing? Does it include the
+            // whitespace used for indentation? So, yeah, out it goes.
+            //
+            // This is used right now for escaping quotation marks and double
+            // backslashes.
+            //
+            // 1. `\u{xxxx}`
+            // 2. `\t`
+            // 3. `\r`
+            // 4. `\n`
+            // 5. `\s`
             Escaped,
             Next,
             Finished,
         }
 
-        use State::*;
+        use MachineState::*;
 
-        let (_, res) = self.scan_with(Next, |s, su| match (s, su) {
-            (Finished, _) => (Finished, Scan::Ok(Cmd::Terminate)),
-            (_, ScanUnit::Alpha(_)) => (Next, Scan::Ok(Cmd::Append)),
-            (_, ScanUnit::Digit(_)) => (Next, Scan::Ok(Cmd::Append)),
-            (Next, ScanUnit::Quot(q)) if q == quot => (Finished, Scan::Ok(Cmd::Append)),
-            (_, ScanUnit::Quot(_)) => (Next, Scan::Ok(Cmd::Append)),
-            (Next, ScanUnit::Operator(Operator('\\'))) => (Escaped, Scan::Ok(Cmd::Append)),
-            (_, ScanUnit::Operator(_)) => (Next, Scan::Ok(Cmd::Append)),
-            (_, ScanUnit::Delimiter(_)) => (Next, Scan::Ok(Cmd::Append)),
-            (_, ScanUnit::Space(_)) => (Next, Scan::Ok(Cmd::Append)),
-            (Escaped, ScanUnit::Newline(_)) => (Next, Scan::Ok(Cmd::Append)),
-            (_, ScanUnit::Newline(_)) => (Next, Scan::Err(Cmd::Terminate)),
-            (_, ScanUnit::Unknown(_)) => (Next, Scan::Ok(Cmd::Append)),
-            (_, ScanUnit::Eof) => (Next, Scan::Err(Cmd::Terminate)),
+        let (s, is_nonascii, res) = self.scan_with((Next, true), |(ms, ok), su| match ms {
+            Finished => ((Finished, ok), Scan::Ok(Cmd::Terminate)),
+            Next => match su {
+                ScanUnit::Quot(q) if q == quot => ((Finished, ok), Scan::Ok(Cmd::Append)),
+                ScanUnit::Operator(Operator('\\')) => ((Escaped, ok), Scan::Ok(Cmd::Append)),
+                ScanUnit::Space(Space::Tab) => ((Next, false), Scan::Ok(Cmd::Append)),
+                ScanUnit::Newline(_) => ((Next, ok), Scan::Err(Cmd::Terminate)),
+                ScanUnit::Eof => ((Finished, ok), Scan::Err(Cmd::Terminate)),
+                _ => ((Next, ok), Scan::Ok(Cmd::Append)),
+            },
+            Escaped => match su {
+                ScanUnit::Alpha(Alpha('r')) => ((Next, ok), Scan::Ok(Cmd::Append)),
+                ScanUnit::Alpha(Alpha('n')) => ((Next, ok), Scan::Ok(Cmd::Append)),
+                ScanUnit::Alpha(Alpha('t')) => ((Next, ok), Scan::Ok(Cmd::Append)),
+                ScanUnit::Alpha(Alpha('s')) => ((Next, ok), Scan::Ok(Cmd::Append)),
+                ScanUnit::Alpha(_) => ((Next, ok), Scan::Err(Cmd::Append)),
+                ScanUnit::Digit(_) => ((Next, ok), Scan::Err(Cmd::Append)),
+                ScanUnit::Quot(_) => ((Next, ok), Scan::Ok(Cmd::Append)),
+                ScanUnit::Operator(Operator('\\')) => ((Next, ok), Scan::Ok(Cmd::Append)),
+                ScanUnit::Operator(_) => ((Next, ok), Scan::Err(Cmd::Append)),
+                ScanUnit::Delimiter(_) => ((Next, ok), Scan::Err(Cmd::Append)),
+                ScanUnit::Space(Space::Space) => ((Next, ok), Scan::Err(Cmd::Append)),
+                ScanUnit::Space(Space::Tab) => ((Next, false), Scan::Err(Cmd::Append)),
+                ScanUnit::Newline(_) => ((Next, ok), Scan::Err(Cmd::Terminate)),
+                ScanUnit::Unknown(_) => ((Next, ok), Scan::Err(Cmd::Append)),
+                ScanUnit::Eof => ((Finished, ok), Scan::Err(Cmd::Terminate)),
+            },
         });
 
         map_tok(res, |str| {
-            TokenKind::ByteString(ByteString::from_quot(quot, str))
+            TokenKind::ByteString(ByteString::from_quot(quot, str, !s.1 || is_nonascii))
         })
     }
 
     fn scan_operator(&mut self) -> TokenKind {
-        let res = self.scan(|su| match su {
+        let (_, res) = self.scan(|su| match su {
             ScanUnit::Alpha(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Digit(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Quot(_) => Scan::Err(Cmd::Terminate), // `<='` seems like a weird thing to support...
@@ -248,7 +273,7 @@ impl Lexer {
         // We cluster whitespace tokens into a single one for efficiency.
         // Importantly, we'd only do this for as long as the whitespace is the
         // same as the one we started out with.
-        let res = self.take_while(|su| match su {
+        let (_, res) = self.take_while(|su| match su {
             ScanUnit::Alpha(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Digit(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Quot(_) => Scan::Ok(Cmd::Terminate),
@@ -270,7 +295,7 @@ impl Lexer {
     }
 
     fn scan_newlines(&mut self) -> TokenKind {
-        let res = self.take_while(|su| match su {
+        let (_, res) = self.take_while(|su| match su {
             ScanUnit::Alpha(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Digit(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Quot(_) => Scan::Ok(Cmd::Terminate),
@@ -286,16 +311,8 @@ impl Lexer {
     }
 }
 
-impl TokenStream {
-    pub fn new(input: impl Into<String>) -> TokenStream {
-        TokenStream {
-            lexer: Lexer::new(input),
-        }
-    }
-}
-
 impl Iterator for Lexer {
-    type Item = (Option<Absolute>, Token);
+    type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.cursor.end() {
@@ -322,14 +339,6 @@ impl Iterator for Lexer {
             }
         };
 
-        Some((self.offside.absolute_offside(), Token::new(kind, pos)))
-    }
-}
-
-impl Iterator for TokenStream {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.lexer.next().map(|(_, tok)| tok)
+        Some(Token::new(kind, pos))
     }
 }

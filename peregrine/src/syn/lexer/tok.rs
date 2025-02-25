@@ -2,6 +2,41 @@ use crate::idx;
 
 use crate::ast::Position;
 use crate::syn::cursor::{Gate, Quotation};
+use crate::syn::offside::{Measured, OffsideTape};
+
+idx::newindex!(pub TokenId);
+
+pub type TokenVec = idx::IndexedVec<TokenId, Token>;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Token {
+    kind: TokenKind,
+    pos: Position,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum TokenKind {
+    Unknown(Unknown),
+    Kw(Keyword),
+    Ident(String),
+    Numeral(String),
+    ByteString(ByteString),
+    Operator(String),
+    Group(Group),
+    Ws(Ws),
+    Semicolon,
+    Comma,
+    Eof,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TokenBuf {
+    str: String,
+    is_whitespace_insignificant: bool,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Unknown(TokenBuf);
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Keyword {
@@ -15,13 +50,13 @@ pub enum Keyword {
     Renaming,
 
     // Product and sum types
-    Struct,
+    Record,
     Data,
     Deriving,
 
-    // Typeclasses
-    Class,
-    Instance,
+    // Trait stuff
+    Trait,
+    Impl,
 
     // Syntactic delimiters
     Where,
@@ -53,18 +88,15 @@ pub enum Keyword {
 // 1. this includes the quotation marks in all cases.
 // 2. in the case of ByteChar, the length of the string is still arbitrary.
 // 3. using `len()` returns the number of bytes of the source code, not the span.
-//
-// We also have to store `Position` in `ByteString` since it contains multiline
-// string literals, and all other `TokenKind` can only span one line anyway.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ByteString {
-    ByteString(String),
-    ByteChar(String),
+    ByteString(TokenBuf),
+    ByteChar(TokenBuf),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Parity {
-    Opened,
+    Open,
     Closed,
 }
 
@@ -82,30 +114,48 @@ pub enum Ws {
     Newline { count: usize },
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum TokenKind {
-    Unknown(String),
-    Kw(Keyword),
-    Ident(String),
-    Numeral(String),
-    ByteString(ByteString),
-    Operator(String),
-    Group(Group),
-    Ws(Ws),
-    Semicolon,
-    Comma,
-    Eof,
+pub trait TokenDetail {
+    fn to_str(&self) -> &str;
+
+    fn len(&self) -> usize {
+        self.to_str().len()
+    }
 }
-
-idx::newindex!(pub TokenId);
-
-pub type TokenVec = idx::IndexedVec<TokenId, Token>;
 
 impl TokenVec {
     pub fn get_pos(&self, id: TokenId) -> (Position, Position) {
         let begin = self[id].pos;
         let end = self.get(TokenVec::next_id(id)).map_or(begin, |tok| tok.pos);
         (begin, end)
+    }
+}
+
+impl Token {
+    pub(crate) fn new(kind: TokenKind, pos: Position) -> Token {
+        Token { kind, pos }
+    }
+
+    pub fn kind(&self) -> &TokenKind {
+        &self.kind
+    }
+}
+
+impl TokenBuf {
+    pub fn new(str: String, is_whitespace_insignificant: bool) -> TokenBuf {
+        TokenBuf {
+            str,
+            is_whitespace_insignificant,
+        }
+    }
+}
+
+impl Unknown {
+    pub fn new(str: String, is_whitespace_insignificant: bool) -> Unknown {
+        Unknown(TokenBuf::new(str, is_whitespace_insignificant))
+    }
+
+    pub fn is_whitespace_insignificant(&self) -> bool {
+        self.0.is_whitespace_insignificant
     }
 }
 
@@ -119,10 +169,10 @@ impl Keyword {
             "open" => Some(Keyword::Open),
             "hiding" => Some(Keyword::Hiding),
             "renaming" => Some(Keyword::Renaming),
-            "struct" => Some(Keyword::Struct),
+            "record" => Some(Keyword::Record),
             "data" => Some(Keyword::Data),
-            "class" => Some(Keyword::Class),
-            "instance" => Some(Keyword::Instance),
+            "trait" => Some(Keyword::Trait),
+            "impl" => Some(Keyword::Impl),
             "deriving" => Some(Keyword::Deriving),
             "where" => Some(Keyword::Where),
             "let" => Some(Keyword::Let),
@@ -139,8 +189,92 @@ impl Keyword {
             _ => None,
         }
     }
+}
 
-    pub fn to_str(&self) -> &str {
+impl ByteString {
+    pub fn new_bytestring(str: impl Into<String>, is_whitespace_insignificant: bool) -> ByteString {
+        ByteString::ByteString(TokenBuf::new(str.into(), is_whitespace_insignificant))
+    }
+
+    pub fn new_bytechar(str: impl Into<String>, is_whitespace_insignificant: bool) -> ByteString {
+        ByteString::ByteChar(TokenBuf::new(str.into(), is_whitespace_insignificant))
+    }
+
+    pub fn from_quot(
+        quot: Quotation,
+        str: impl Into<String>,
+        is_whitespace_insignificant: bool,
+    ) -> ByteString {
+        match quot {
+            Quotation::Single => ByteString::new_bytechar(str, is_whitespace_insignificant),
+            Quotation::Double => ByteString::new_bytestring(str, is_whitespace_insignificant),
+        }
+    }
+
+    pub fn is_whitespace_insignificant(&self) -> bool {
+        match self {
+            ByteString::ByteString(token_buf) => token_buf.is_whitespace_insignificant,
+            ByteString::ByteChar(token_buf) => token_buf.is_whitespace_insignificant,
+        }
+    }
+}
+
+impl Parity {
+    pub fn get_dual(self) -> Parity {
+        match self {
+            Parity::Open => Parity::Closed,
+            Parity::Closed => Parity::Open,
+        }
+    }
+}
+
+impl From<Gate> for Parity {
+    fn from(value: Gate) -> Self {
+        match value {
+            Gate::Open => Parity::Open,
+            Gate::Closed => Parity::Closed,
+        }
+    }
+}
+
+impl Group {
+    pub fn get_dual(self) -> Group {
+        match self {
+            Group::Paren(p) => Group::Paren(p.get_dual()),
+            Group::Brace(p) => Group::Brace(p.get_dual()),
+            Group::Bracket(p) => Group::Bracket(p.get_dual()),
+        }
+    }
+}
+
+impl Ws {
+    pub fn is_space(&self) -> bool {
+        matches!(self, Ws::Space { .. })
+    }
+
+    pub fn is_tab(&self) -> bool {
+        matches!(self, Ws::Tab { .. })
+    }
+
+    pub fn is_newline(&self) -> bool {
+        matches!(self, Ws::Newline { .. })
+    }
+}
+
+impl TokenDetail for TokenBuf {
+    fn to_str(&self) -> &str {
+        &self.str
+    }
+}
+
+impl TokenDetail for Unknown {
+    fn to_str(&self) -> &str {
+        self.0.to_str()
+    }
+}
+
+impl TokenDetail for Keyword {
+    fn to_str(&self) -> &str {
         match self {
             Keyword::Module => "module",
             Keyword::Import => "import",
@@ -149,11 +283,11 @@ impl Keyword {
             Keyword::Open => "open",
             Keyword::Hiding => "hiding",
             Keyword::Renaming => "renaming",
-            Keyword::Struct => "struct",
+            Keyword::Record => "record",
             Keyword::Data => "data",
             Keyword::Deriving => "deriving",
-            Keyword::Class => "class",
-            Keyword::Instance => "instance",
+            Keyword::Trait => "trait",
+            Keyword::Impl => "impl",
             Keyword::Where => "where",
             Keyword::Let => "let",
             Keyword::In => "in",
@@ -168,77 +302,97 @@ impl Keyword {
             Keyword::Exists => "exists",
         }
     }
-
-    pub fn len(&self) -> usize {
-        self.to_str().len()
-    }
 }
 
-impl ByteString {
-    pub fn new_bytestring(str: impl Into<String>) -> ByteString {
-        ByteString::ByteString(str.into())
-    }
-
-    pub fn new_bytechar(str: impl Into<String>) -> ByteString {
-        ByteString::ByteChar(str.into())
-    }
-
-    pub fn from_quot(quot: Quotation, str: impl Into<String>) -> ByteString {
-        match quot {
-            Quotation::Single => ByteString::new_bytechar(str),
-            Quotation::Double => ByteString::new_bytestring(str),
-        }
-    }
-
-    /// Returns the length of the string including the quotations.
-    pub fn len(&self) -> usize {
+impl TokenDetail for ByteString {
+    fn to_str(&self) -> &str {
         match self {
-            ByteString::ByteString(str) => str.len(),
-            ByteString::ByteChar(str) => str.len(),
+            ByteString::ByteString(token_buf) => token_buf.to_str(),
+            ByteString::ByteChar(token_buf) => token_buf.to_str(),
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Token {
-    kind: TokenKind,
-    pos: Position,
-}
-
-impl Token {
-    pub(crate) fn new(kind: TokenKind, pos: Position) -> Token {
-        Token { kind, pos }
-    }
-
-    pub fn kind(&self) -> &TokenKind {
-        &self.kind
-    }
-}
-
-impl Parity {
-    pub fn get_dual(self) -> Parity {
+impl TokenDetail for Group {
+    fn to_str(&self) -> &str {
         match self {
-            Parity::Opened => Parity::Closed,
-            Parity::Closed => Parity::Opened,
+            Group::Paren(Parity::Open) => "(",
+            Group::Paren(Parity::Closed) => ")",
+            Group::Brace(Parity::Open) => "{",
+            Group::Brace(Parity::Closed) => "}",
+            Group::Bracket(Parity::Open) => "[",
+            Group::Bracket(Parity::Closed) => "]",
         }
     }
 }
 
-impl From<Gate> for Parity {
-    fn from(value: Gate) -> Self {
-        match value {
-            Gate::Open => Parity::Opened,
-            Gate::Closed => Parity::Closed,
-        }
+impl OffsideTape for Token {
+    fn measure(&self) -> Option<Measured> {
+        self.kind().measure()
     }
 }
 
-impl Group {
-    pub fn get_dual(self) -> Group {
+impl OffsideTape for TokenKind {
+    fn measure(&self) -> Option<Measured> {
         match self {
-            Group::Paren(p) => Group::Paren(p.get_dual()),
-            Group::Brace(p) => Group::Brace(p.get_dual()),
-            Group::Bracket(p) => Group::Bracket(p.get_dual()),
+            TokenKind::Unknown(u) => u.measure(),
+            TokenKind::Kw(kw) => kw.measure(),
+            TokenKind::Ident(ident) => Some(Measured::Monospace(ident.len() as u16)),
+            TokenKind::Numeral(num) => Some(Measured::Monospace(num.len() as u16)),
+            TokenKind::ByteString(byte_string) => byte_string.measure(),
+            TokenKind::Operator(op) => Some(Measured::Monospace(op.len() as u16)),
+            TokenKind::Group(g) => g.measure(),
+            TokenKind::Ws(ws) => ws.measure(),
+            TokenKind::Semicolon => Some(Measured::Monospace(1)),
+            TokenKind::Comma => Some(Measured::Monospace(1)),
+            TokenKind::Eof => Some(Measured::Retract),
+        }
+    }
+}
+
+impl OffsideTape for TokenBuf {
+    fn measure(&self) -> Option<Measured> {
+        if self.is_whitespace_insignificant {
+            return None;
+        }
+
+        Some(Measured::Monospace(self.len() as u16))
+    }
+}
+
+impl OffsideTape for Unknown {
+    fn measure(&self) -> Option<Measured> {
+        self.0.measure()
+    }
+}
+
+impl OffsideTape for Keyword {
+    fn measure(&self) -> Option<Measured> {
+        Some(Measured::Monospace(self.len() as u16))
+    }
+}
+
+impl OffsideTape for ByteString {
+    fn measure(&self) -> Option<Measured> {
+        match self {
+            ByteString::ByteString(token_buf) => token_buf.measure(),
+            ByteString::ByteChar(token_buf) => token_buf.measure(),
+        }
+    }
+}
+
+impl OffsideTape for Group {
+    fn measure(&self) -> Option<Measured> {
+        Some(Measured::Monospace(self.len() as u16))
+    }
+}
+
+impl OffsideTape for Ws {
+    fn measure(&self) -> Option<Measured> {
+        match self {
+            Ws::Space { count } => Some(Measured::Monospace(*count as u16)),
+            Ws::Tab { count } => Some(Measured::Elastic(*count as u16)),
+            Ws::Newline { .. } => Some(Measured::Retract),
         }
     }
 }

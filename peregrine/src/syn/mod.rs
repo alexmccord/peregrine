@@ -4,20 +4,13 @@ pub mod offside;
 pub mod parser;
 
 use lexer::tok::{Group, TokenVec};
-use lexer::TokenStream;
-use parser::Parser;
 
 use crate::ast::expr::ExprId;
 use crate::ast::node::{Node, NodeId};
 use crate::ast::{Ast, SourceSpan, TokenSpan};
 
-pub fn parse(input: impl Into<String>) -> ParseResult {
-    Parser::parse(input)
-}
-
-pub fn tokenize(input: impl Into<String>) -> TokenVec {
-    TokenVec::from_iter(TokenStream::new(input))
-}
+pub use lexer::tokenize;
+pub use parser::parse;
 
 pub struct SourceModule {
     pub ast: Ast,
