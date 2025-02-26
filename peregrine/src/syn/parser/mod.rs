@@ -6,7 +6,7 @@ use crate::ast::node::NodeId;
 use crate::ast::{Ast, TokenSpan};
 use crate::syn::lexer::tok::*;
 use crate::syn::lexer::Lexer;
-use crate::syn::offside::Absolute;
+use crate::syn::offside::AbsoluteOffside;
 use crate::syn::{ParseResult, SourceModule, SyntaxError};
 
 use super::offside::{Indentation, OffsideBy, PartialOffsideOrd};
@@ -20,7 +20,7 @@ pub fn parse(input: impl Into<String>) -> ParseResult {
 #[derive(Debug)]
 pub struct Parser {
     lexer: Lexer,
-    lookahead: Option<Token>,
+    lookahead: Option<TokenId>,
     errors: Vec<(NodeId, SyntaxError)>,
     exprs: idx::Generation<ExprId>,
     decls: idx::Generation<DeclId>,
@@ -31,7 +31,7 @@ pub struct Parser {
 
 #[derive(Debug)]
 struct LayoutStack {
-    offsides: Vec<Option<Absolute>>,
+    offsides: Vec<Option<AbsoluteOffside>>,
 }
 
 enum Precedence {
@@ -71,24 +71,22 @@ impl Parser {
     }
 
     fn next_tok(&mut self) -> Option<TokenId> {
+        match self.layout_stack.partial_cmp_offside(&self.current_offside) {
+            Some(Indentation::Dedented) => (),
+            Some(Indentation::Aligned) => (),
+            Some(Indentation::Indented) => (),
+            None => (),
+        };
+
         while let Some(tok) = self.lexer.next() {
             self.current_offside.add(&tok);
 
-            if let TokenKind::Ws(ws) = tok.kind() {
-                match ws {
-                    Ws::Newline { .. } => continue,
-                    _ if self
-                        .layout_stack
-                        .is_more_indented_than(&self.current_offside) =>
-                    {
-                        continue
-                    }
-                    _ => (),
-                }
+            if let TokenKind::Ws(Ws::Newline { .. }) = tok.kind() {
+                continue;
             }
 
-            match self.lookahead.replace(tok) {
-                Some(tok) => return Some(self.tokens.push(tok)),
+            match self.lookahead.replace(self.tokens.push(tok)) {
+                Some(tok_id) => return Some(tok_id),
                 // This will force the loop to evaluate twice if
                 // `self.lookahead` is None. This inevitably will
                 // lead to the above `Some` case above or exits
@@ -97,8 +95,8 @@ impl Parser {
             }
         }
 
-        let tok = self.lookahead.take()?;
-        Some(self.tokens.push(tok))
+        let tok_id = self.lookahead.take()?;
+        Some(tok_id)
     }
 
     fn skip_ws(&mut self) {
@@ -114,7 +112,7 @@ impl Parser {
     where
         F: FnOnce(&TokenKind) -> bool,
     {
-        if f(&self.lookahead.as_ref()?.kind()) {
+        if f(&self.tokens[self.lookahead?].kind()) {
             self.next_tok()
         } else {
             None
@@ -196,7 +194,7 @@ impl Parser {
         Decl::new(self.decls.next(), decl, TokenSpan::new(begin_tok, end_tok))
     }
 
-    fn parse_decl(&mut self, offside: &Option<Absolute>) -> Option<Decl> {
+    fn parse_decl(&mut self, offside: &Option<AbsoluteOffside>) -> Option<Decl> {
         if self.layout_stack.is_aligned_with(offside) {
             let tok = self.next_tok()?;
             self.parse_decl_tail(offside, tok)
@@ -205,7 +203,7 @@ impl Parser {
         }
     }
 
-    fn parse_decl_tail(&mut self, offside: &Option<Absolute>, tok: TokenId) -> Option<Decl> {
+    fn parse_decl_tail(&mut self, offside: &Option<AbsoluteOffside>, tok: TokenId) -> Option<Decl> {
         match self.tokens[tok].kind() {
             TokenKind::Unknown(_) => todo!(),
             TokenKind::Kw(Keyword::Module) => Some(self.parse_module_tail(offside, tok)),
@@ -244,7 +242,7 @@ impl Parser {
         }
     }
 
-    fn parse_decls(&mut self, offside: &Option<Absolute>) -> Vec<Decl> {
+    fn parse_decls(&mut self, offside: &Option<AbsoluteOffside>) -> Vec<Decl> {
         let mut decls = Vec::new();
 
         while let Some(decl) = self.parse_decl(offside) {
@@ -284,7 +282,11 @@ impl Parser {
         (ok, Path::new(path), last_tok)
     }
 
-    fn parse_module_tail(&mut self, offside: &Option<Absolute>, module_tok: TokenId) -> Decl {
+    fn parse_module_tail(
+        &mut self,
+        offside: &Option<AbsoluteOffside>,
+        module_tok: TokenId,
+    ) -> Decl {
         self.skip_ws();
 
         let (ok, path, last_tok) = self.parse_path();
@@ -308,7 +310,11 @@ impl Parser {
         }
     }
 
-    fn parse_import_tail(&mut self, offside: &Option<Absolute>, import_tok: TokenId) -> Decl {
+    fn parse_import_tail(
+        &mut self,
+        offside: &Option<AbsoluteOffside>,
+        import_tok: TokenId,
+    ) -> Decl {
         self.skip_ws();
 
         let (ok, path, last_tok) = self.parse_path();
@@ -331,7 +337,11 @@ impl Parser {
         }
     }
 
-    fn parse_export_tail(&mut self, offside: &Option<Absolute>, export_tok: TokenId) -> Decl {
+    fn parse_export_tail(
+        &mut self,
+        offside: &Option<AbsoluteOffside>,
+        export_tok: TokenId,
+    ) -> Decl {
         self.skip_ws();
 
         if let Some(inner) = self.parse_decl(offside) {
@@ -342,7 +352,11 @@ impl Parser {
         self.report_decl_error(SyntaxError::MissingDecl, export_tok, export_tok)
     }
 
-    fn parse_public_tail(&mut self, offside: &Option<Absolute>, public_tok: TokenId) -> Decl {
+    fn parse_public_tail(
+        &mut self,
+        offside: &Option<AbsoluteOffside>,
+        public_tok: TokenId,
+    ) -> Decl {
         self.skip_ws();
 
         if let Some(inner) = self.parse_decl(offside) {
@@ -353,7 +367,7 @@ impl Parser {
         self.report_decl_error(SyntaxError::MissingDecl, public_tok, public_tok)
     }
 
-    fn parse_open_tail(&mut self, offside: &Option<Absolute>, open_tok: TokenId) -> Decl {
+    fn parse_open_tail(&mut self, offside: &Option<AbsoluteOffside>, open_tok: TokenId) -> Decl {
         self.skip_ws();
 
         if let Some(inner) = self.parse_decl(offside) {
@@ -364,7 +378,11 @@ impl Parser {
         self.report_decl_error(SyntaxError::MissingDecl, open_tok, open_tok)
     }
 
-    fn parse_record_tail(&mut self, offside: &Option<Absolute>, record_tok: TokenId) -> Decl {
+    fn parse_record_tail(
+        &mut self,
+        offside: &Option<AbsoluteOffside>,
+        record_tok: TokenId,
+    ) -> Decl {
         self.skip_ws();
 
         let sig = self.parse_expr(Precedence::TyAnn).unwrap_or_else(|| {
@@ -393,7 +411,7 @@ impl Parser {
         self.make_decl(DeclKind::new_record(sig, exprs), record_tok, last_tok)
     }
 
-    fn parse_data_tail(&mut self, offside: &Option<Absolute>, data_tok: TokenId) -> Decl {
+    fn parse_data_tail(&mut self, offside: &Option<AbsoluteOffside>, data_tok: TokenId) -> Decl {
         self.skip_ws();
 
         let sig = self.parse_expr(Precedence::TyAnn).unwrap_or_else(|| {
@@ -412,7 +430,7 @@ impl Parser {
         self.make_decl(DeclKind::empty_data(sig), data_tok, last_tok)
     }
 
-    fn parse_trait_tail(&mut self, offside: &Option<Absolute>, trait_tok: TokenId) -> Decl {
+    fn parse_trait_tail(&mut self, offside: &Option<AbsoluteOffside>, trait_tok: TokenId) -> Decl {
         self.skip_ws();
 
         let sig = self.parse_expr(Precedence::TyAnn).unwrap_or_else(|| {
@@ -427,7 +445,7 @@ impl Parser {
         self.make_decl(DeclKind::new_trait(sig, Vec::new()), trait_tok, last_tok)
     }
 
-    fn parse_impl_tail(&mut self, offside: &Option<Absolute>, impl_tail: TokenId) -> Decl {
+    fn parse_impl_tail(&mut self, offside: &Option<AbsoluteOffside>, impl_tail: TokenId) -> Decl {
         self.skip_ws();
 
         let sig = self.parse_expr(Precedence::TyAnn).unwrap_or_else(|| {
@@ -444,7 +462,7 @@ impl Parser {
 
     fn parse_ident_sig_tail(
         &mut self,
-        offside: &Option<Absolute>,
+        offside: &Option<AbsoluteOffside>,
         sig_tok: TokenId,
         ident: String,
     ) -> Decl {
@@ -454,7 +472,11 @@ impl Parser {
         self.parse_sig_tail(offside, var)
     }
 
-    fn parse_op_sig_tail(&mut self, offside: &Option<Absolute>, open_paren: TokenId) -> Decl {
+    fn parse_op_sig_tail(
+        &mut self,
+        offside: &Option<AbsoluteOffside>,
+        open_paren: TokenId,
+    ) -> Decl {
         self.skip_ws();
 
         let expr = self
@@ -480,7 +502,7 @@ impl Parser {
         }
     }
 
-    fn parse_sig_tail(&mut self, offside: &Option<Absolute>, expr: Expr) -> Decl {
+    fn parse_sig_tail(&mut self, offside: &Option<AbsoluteOffside>, expr: Expr) -> Decl {
         self.skip_ws();
 
         let Some(colon_tok) = self.try_parse_operator(":") else {
@@ -496,7 +518,7 @@ impl Parser {
         self.make_decl(DeclKind::new_sig(expr, ty), begin, end)
     }
 
-    fn parse_equation_tail(&mut self, offside: &Option<Absolute>, expr: Expr) -> Decl {
+    fn parse_equation_tail(&mut self, offside: &Option<AbsoluteOffside>, expr: Expr) -> Decl {
         todo!()
     }
 
@@ -816,7 +838,7 @@ impl LayoutStack {
         }
     }
 
-    fn push(&mut self, offside: Option<Absolute>) {
+    fn push(&mut self, offside: Option<AbsoluteOffside>) {
         self.offsides.push(offside);
     }
 
@@ -837,8 +859,8 @@ impl<T> PartialOffsideOrd<LayoutStack> for OffsideBy<T> {
     }
 }
 
-impl PartialOffsideOrd<Option<Absolute>> for LayoutStack {
-    fn partial_cmp_offside(&self, other: &Option<Absolute>) -> Option<Indentation> {
+impl PartialOffsideOrd<Option<AbsoluteOffside>> for LayoutStack {
+    fn partial_cmp_offside(&self, other: &Option<AbsoluteOffside>) -> Option<Indentation> {
         self.offsides
             .last()?
             .as_ref()
@@ -846,7 +868,7 @@ impl PartialOffsideOrd<Option<Absolute>> for LayoutStack {
     }
 }
 
-impl PartialOffsideOrd<LayoutStack> for Option<Absolute> {
+impl PartialOffsideOrd<LayoutStack> for Option<AbsoluteOffside> {
     fn partial_cmp_offside(&self, other: &LayoutStack) -> Option<Indentation> {
         PartialOffsideOrd::partial_cmp_offside(other, self)
     }

@@ -6,7 +6,7 @@ fn write_target_abs<F>(
     offside: &mut OffsideBy<ScanUnit>,
     str: impl Into<String>,
     f: F,
-) -> Option<Option<Absolute>>
+) -> Option<Option<AbsoluteOffside>>
 where
     F: Fn(&ScanUnit) -> bool,
 {
@@ -22,7 +22,7 @@ where
     absolute
 }
 
-fn write_abs(offside: &mut OffsideBy<ScanUnit>, str: &str) -> Absolute {
+fn write_abs(offside: &mut OffsideBy<ScanUnit>, str: &str) -> AbsoluteOffside {
     for su in Cursor::new(str) {
         offside.add(&su);
     }
@@ -30,7 +30,7 @@ fn write_abs(offside: &mut OffsideBy<ScanUnit>, str: &str) -> Absolute {
     offside.absolute.clone()
 }
 
-fn write(offside: &mut OffsideBy<ScanUnit>, str: &str) -> Option<Relative> {
+fn write(offside: &mut OffsideBy<ScanUnit>, str: &str) -> Option<OffsideUnit> {
     for su in Cursor::new(str) {
         offside.add(&su);
     }
@@ -268,4 +268,16 @@ fn partial_ord_sanity() {
     assert!(absolute1.is_less_indented_than(&absolute2));
     assert!(!absolute1.is_aligned_with(&absolute2));
     assert!(!absolute1.is_more_indented_than(&absolute2));
+}
+
+#[test]
+fn iterable() {
+    let mut offside = OffsideBy::new();
+
+    let abs = write_abs(&mut offside, "abc\tabc\t");
+
+    for rel in abs {
+        assert_eq!(rel.monospace(), 3);
+        assert_eq!(rel.elastic(), 1);
+    }
 }
