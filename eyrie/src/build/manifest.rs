@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use toml;
 
-use peregrine::fs::{FileResolver, FileResolverError};
+use prgc::fs::{FileResolver, FileResolverError};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Package {
@@ -181,7 +181,7 @@ mod tests {
     use serde::Deserialize;
 
     use super::*;
-    use peregrine::fs::VirtualFileSystem;
+    use prgc::fs::VirtualFileSystem;
 
     #[test]
     fn deser_into_project_manifest() {

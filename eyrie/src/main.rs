@@ -1,8 +1,9 @@
 use clap::Parser;
 
-use eyrie::{self, Command};
+use eyrie;
+use eyrie::Command;
 
-use peregrine::fs::FileSystemIO;
+use prgc::fs::FileSystemIO;
 
 fn main() {
     let args = Command::parse();

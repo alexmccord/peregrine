@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use peregrine::fs::FileResolver;
+use prgc::fs::FileResolver;
 
 mod deps;
 pub mod manifest;
@@ -19,7 +19,7 @@ mod tests {
 
     use super::*;
     use manifest::{ProjectManifest, WorkspaceManifest};
-    use peregrine::fs::VirtualFileSystem;
+    use prgc::fs::VirtualFileSystem;
 
     fn project(name: &str) -> String {
         toml::to_string(&ProjectManifest::new(name.to_string())).unwrap()

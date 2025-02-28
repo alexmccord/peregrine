@@ -1,0 +1,6 @@
+[package]
+name = "prgc_ast"
+edition = "2021"
+
+[dependencies]
+prgc_idx = { path = "../prgc_idx" }

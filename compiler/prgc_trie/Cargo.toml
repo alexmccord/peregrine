@@ -1,0 +1,3 @@
+[package]
+name = "prgc_trie"
+edition = "2021"

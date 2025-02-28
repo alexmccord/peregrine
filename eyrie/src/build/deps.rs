@@ -1,5 +1,5 @@
-use peregrine::ast;
-use peregrine::ast::decl::{Decl, DeclKind, Import};
+use prgc::ast;
+use prgc::ast::decl::{Decl, DeclKind, Import};
 
 pub struct Dependencies<'ast> {
     pub imports: Vec<(&'ast Decl, &'ast Import)>,
@@ -28,8 +28,8 @@ impl<'ast> Dependencies<'ast> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use peregrine::ast::decl::{Path, PathNode};
-    use peregrine::syn;
+    use prgc::ast::decl::{Path, PathNode};
+    use prgc::syn;
 
     #[test]
     fn empty_imports() {

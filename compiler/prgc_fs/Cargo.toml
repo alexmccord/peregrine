@@ -1,0 +1,7 @@
+[package]
+name = "prgc_fs"
+edition = "2021"
+
+[dependencies]
+prgc_trie = { path = "../prgc_trie" }
+thiserror = "2.0.11"

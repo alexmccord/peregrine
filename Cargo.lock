@@ -137,7 +137,7 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "git2",
- "peregrine",
+ "prgc",
  "serde",
  "thiserror",
  "toml",
@@ -432,13 +432,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
-name = "peregrine"
-version = "0.0.0"
-dependencies = [
- "thiserror",
-]
-
-[[package]]
 name = "pkg-config"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -449,8 +442,53 @@ name = "prgc"
 version = "0.0.0"
 dependencies = [
  "clap",
- "peregrine",
+ "prgc_ast",
+ "prgc_fs",
+ "prgc_idx",
+ "prgc_sem",
+ "prgc_syn",
+ "prgc_trie",
+ "thiserror",
 ]
+
+[[package]]
+name = "prgc_ast"
+version = "0.0.0"
+dependencies = [
+ "prgc_idx",
+]
+
+[[package]]
+name = "prgc_fs"
+version = "0.0.0"
+dependencies = [
+ "prgc_trie",
+ "thiserror",
+]
+
+[[package]]
+name = "prgc_idx"
+version = "0.0.0"
+
+[[package]]
+name = "prgc_sem"
+version = "0.0.0"
+dependencies = [
+ "prgc_idx",
+]
+
+[[package]]
+name = "prgc_syn"
+version = "0.0.0"
+dependencies = [
+ "prgc_ast",
+ "prgc_idx",
+ "thiserror",
+]
+
+[[package]]
+name = "prgc_trie"
+version = "0.0.0"
 
 [[package]]
 name = "proc-macro2"
