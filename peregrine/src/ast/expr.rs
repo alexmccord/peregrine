@@ -1,8 +1,8 @@
-use crate::ast::TokenSpan;
-
 use crate::idx;
 
-use crate::syn::lexer::tok::{ByteString, TokenId};
+use crate::ast::TokenSpan;
+
+use crate::syn::tok::{ByteString, TokenId};
 
 idx::newindex!(pub ExprId);
 
@@ -32,23 +32,22 @@ pub enum ExprKind {
     // let e = x
     // let e = x in e
     Let(Let),
-    // let main = do
-    //   print "a"
-    //   print "b"
+    // do print "a"
+    //    print "b"
     Do(Do),
     // if cond then t else f
     If(IfThenElse),
-    // let length = function
-    //   | []      -> 0
-    //   | (x::xs) -> 1 + length xs
+    // length =
+    //   function
+    //     pat -> expr
     Function(Function),
-    // let filter f = function
-    //   | []      -> []
-    //   | (x::xs) -> if f x then x::filter f xs else filter f xs
+    // match f x with
+    //   pat -> expr
     Match(Match),
     // (e)
     Assoc(Assoc),
-    // forall f a. a -> f a
+    // 1: forall f a. a -> f a
+    // 2: forall n | n < 2^64. n
     Forall(Forall),
     // exists a. f a -> g a
     Exists(Exists),
@@ -96,19 +95,30 @@ pub struct IfThenElse {
 }
 
 #[derive(Debug)]
-pub struct Function(pub Box<Expr>);
+pub struct Arm {
+    pub pat: Expr,
+    pub expr: Expr,
+}
 
 #[derive(Debug)]
-pub struct Match(pub Box<Expr>, pub Box<Expr>);
+pub struct Function {
+    pub alternatives: Vec<Arm>,
+}
+
+#[derive(Debug)]
+pub struct Match {
+    pub antecedent: Box<Expr>,
+    pub alternatives: Vec<Arm>,
+}
 
 #[derive(Debug)]
 pub struct Assoc(pub Box<Expr>);
 
 #[derive(Debug)]
-pub struct Forall(pub Box<Expr>, pub Box<Expr>);
+pub struct Forall(pub Box<Expr>, pub Option<Box<Expr>>, pub Box<Expr>);
 
 #[derive(Debug)]
-pub struct Exists(pub Box<Expr>, pub Box<Expr>);
+pub struct Exists(pub Box<Expr>, pub Option<Box<Expr>>, pub Box<Expr>);
 
 impl Expr {
     pub fn new(id: ExprId, kind: ExprKind, token_span: TokenSpan) -> Expr {
@@ -287,20 +297,20 @@ impl ExprKind {
         ExprKind::If(IfThenElse::new(antecedent, consequent, alternative))
     }
 
-    pub fn function(alternatives: Expr) -> ExprKind {
+    pub fn function(alternatives: Vec<Arm>) -> ExprKind {
         ExprKind::Function(Function::new(alternatives))
     }
 
-    pub fn match_with(antecedent: Expr, alternatives: Expr) -> ExprKind {
+    pub fn match_with(antecedent: Expr, alternatives: Vec<Arm>) -> ExprKind {
         ExprKind::Match(Match::new(antecedent, alternatives))
     }
 
-    pub fn forall(param: Expr, expr: Expr) -> ExprKind {
-        ExprKind::Forall(Forall::new(param, expr))
+    pub fn forall(param: Expr, constraint: Option<Expr>, expr: Expr) -> ExprKind {
+        ExprKind::Forall(Forall::new(param, constraint, expr))
     }
 
-    pub fn exists(param: Expr, expr: Expr) -> ExprKind {
-        ExprKind::Exists(Exists::new(param, expr))
+    pub fn exists(param: Expr, constraint: Option<Expr>, expr: Expr) -> ExprKind {
+        ExprKind::Exists(Exists::new(param, constraint, expr))
     }
 
     pub fn assoc(expr: Expr) -> ExprKind {
@@ -442,14 +452,17 @@ impl IfThenElse {
 }
 
 impl Function {
-    pub fn new(alternatives: Expr) -> Function {
-        Function(Box::new(alternatives))
+    pub fn new(alternatives: Vec<Arm>) -> Function {
+        Function { alternatives }
     }
 }
 
 impl Match {
-    pub fn new(antecedent: Expr, alternatives: Expr) -> Match {
-        Match(Box::new(antecedent), Box::new(alternatives))
+    pub fn new(antecedent: Expr, alternatives: Vec<Arm>) -> Match {
+        Match {
+            antecedent: Box::new(antecedent),
+            alternatives,
+        }
     }
 }
 
@@ -460,13 +473,13 @@ impl Assoc {
 }
 
 impl Forall {
-    pub fn new(param: Expr, expr: Expr) -> Forall {
-        Forall(Box::new(param), Box::new(expr))
+    pub fn new(param: Expr, constraint: Option<Expr>, expr: Expr) -> Forall {
+        Forall(Box::new(param), constraint.map(Box::new), Box::new(expr))
     }
 }
 
 impl Exists {
-    pub fn new(param: Expr, expr: Expr) -> Exists {
-        Exists(Box::new(param), Box::new(expr))
+    pub fn new(param: Expr, constraint: Option<Expr>, expr: Expr) -> Exists {
+        Exists(Box::new(param), constraint.map(Box::new), Box::new(expr))
     }
 }

@@ -9,7 +9,7 @@ pub enum ScanUnit {
     Delimiter(Delimiter),
     Space(Space),
     Newline(Newline),
-    Unknown(Unknown),
+    Unrecognized(Unrecognized),
     Eof,
 }
 
@@ -68,7 +68,7 @@ pub enum Newline {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub struct Unknown(pub char);
+pub struct Unrecognized(pub char);
 
 impl ScanUnit {
     pub fn byte_len(&self) -> usize {
@@ -80,7 +80,7 @@ impl ScanUnit {
             ScanUnit::Delimiter(d) => d.len(),
             ScanUnit::Space(s) => s.len(),
             ScanUnit::Newline(nl) => nl.len(),
-            ScanUnit::Unknown(u) => u.len(),
+            ScanUnit::Unrecognized(u) => u.len(),
             ScanUnit::Eof => 1,
         }
     }
@@ -96,7 +96,7 @@ impl ScanUnit {
             ScanUnit::Space(Space::Space) => Some(1),
             ScanUnit::Space(Space::Tab) => None,
             ScanUnit::Newline(_) => Some(0),
-            ScanUnit::Unknown(_) => Some(1),
+            ScanUnit::Unrecognized(_) => Some(1),
             ScanUnit::Eof => Some(0),
         }
     }
@@ -110,7 +110,7 @@ impl ScanUnit {
             ScanUnit::Delimiter(delimiter) => delimiter.is_ascii(),
             ScanUnit::Space(space) => space.is_ascii(),
             ScanUnit::Newline(newline) => newline.is_ascii(),
-            ScanUnit::Unknown(unknown) => unknown.is_ascii(),
+            ScanUnit::Unrecognized(unrecognized) => unrecognized.is_ascii(),
             ScanUnit::Eof => true,
         }
     }
@@ -278,7 +278,7 @@ impl Newline {
     }
 }
 
-impl Unknown {
+impl Unrecognized {
     pub fn len(self) -> usize {
         self.0.len_utf8()
     }
@@ -298,7 +298,7 @@ impl OffsideTape for ScanUnit {
             ScanUnit::Delimiter(delimiter) => delimiter.measure(),
             ScanUnit::Space(space) => space.measure(),
             ScanUnit::Newline(newline) => newline.measure(),
-            ScanUnit::Unknown(unknown) => unknown.measure(),
+            ScanUnit::Unrecognized(unrecognized) => unrecognized.measure(),
             ScanUnit::Eof => Some(Measured::Monospace(0)),
         }
     }
@@ -349,7 +349,7 @@ impl OffsideTape for Newline {
     }
 }
 
-impl OffsideTape for Unknown {
+impl OffsideTape for Unrecognized {
     fn measure(&self) -> Option<Measured> {
         self.0.is_ascii().then_some(Measured::Monospace(1))
     }

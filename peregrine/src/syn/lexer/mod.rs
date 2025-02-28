@@ -1,8 +1,8 @@
 use crate::ast::Position;
-use crate::syn::cursor::{Alpha, Cursor, Delimiter, Operator, Quotation, ScanUnit, Space};
+use crate::syn::cursor::{Operator as ScannedOp, *};
 
 pub mod tok;
-use tok::*;
+use tok::{Operator as OpTok, *};
 
 mod tests;
 
@@ -141,7 +141,7 @@ impl Lexer {
         // We don't really _need_ for scan to return a Result
         // in this case, but... why duplicate logic? /shrug.
         let (has_nonascii, res) = self.scan(|c| match c {
-            ScanUnit::Unknown(_) => Scan::Err(Cmd::Append),
+            ScanUnit::Unrecognized(_) => Scan::Err(Cmd::Append),
             _ => Scan::Err(Cmd::Terminate),
         });
 
@@ -159,13 +159,13 @@ impl Lexer {
             ScanUnit::Delimiter(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Space(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Newline(_) => Scan::Ok(Cmd::Terminate),
-            ScanUnit::Unknown(_) => Scan::Ok(Cmd::Terminate),
+            ScanUnit::Unrecognized(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Eof => Scan::Ok(Cmd::Terminate),
         });
 
         map_tok(res, |str| match Keyword::find(&str) {
             Some(kw) => TokenKind::Kw(kw),
-            None => TokenKind::Ident(str),
+            None => TokenKind::Ident(Ident(str)),
         })
     }
 
@@ -178,11 +178,11 @@ impl Lexer {
             ScanUnit::Delimiter(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Space(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Newline(_) => Scan::Ok(Cmd::Terminate),
-            ScanUnit::Unknown(_) => Scan::Ok(Cmd::Terminate),
+            ScanUnit::Unrecognized(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Eof => Scan::Ok(Cmd::Terminate),
         });
 
-        map_tok(res, |str| TokenKind::Numeral(str))
+        map_tok(res, |str| TokenKind::Numeral(Numeral(str)))
     }
 
     fn scan_bytestring(&mut self, quot: Quotation) -> TokenKind {
@@ -211,7 +211,7 @@ impl Lexer {
             Finished => ((Finished, ok), Scan::Ok(Cmd::Terminate)),
             Next => match su {
                 ScanUnit::Quot(q) if q == quot => ((Finished, ok), Scan::Ok(Cmd::Append)),
-                ScanUnit::Operator(Operator('\\')) => ((Escaped, ok), Scan::Ok(Cmd::Append)),
+                ScanUnit::Operator(ScannedOp('\\')) => ((Escaped, ok), Scan::Ok(Cmd::Append)),
                 ScanUnit::Space(Space::Tab) => ((Next, false), Scan::Ok(Cmd::Append)),
                 ScanUnit::Newline(_) => ((Next, ok), Scan::Err(Cmd::Terminate)),
                 ScanUnit::Eof => ((Finished, ok), Scan::Err(Cmd::Terminate)),
@@ -225,13 +225,13 @@ impl Lexer {
                 ScanUnit::Alpha(_) => ((Next, ok), Scan::Err(Cmd::Append)),
                 ScanUnit::Digit(_) => ((Next, ok), Scan::Err(Cmd::Append)),
                 ScanUnit::Quot(_) => ((Next, ok), Scan::Ok(Cmd::Append)),
-                ScanUnit::Operator(Operator('\\')) => ((Next, ok), Scan::Ok(Cmd::Append)),
+                ScanUnit::Operator(ScannedOp('\\')) => ((Next, ok), Scan::Ok(Cmd::Append)),
                 ScanUnit::Operator(_) => ((Next, ok), Scan::Err(Cmd::Append)),
                 ScanUnit::Delimiter(_) => ((Next, ok), Scan::Err(Cmd::Append)),
                 ScanUnit::Space(Space::Space) => ((Next, ok), Scan::Err(Cmd::Append)),
                 ScanUnit::Space(Space::Tab) => ((Next, false), Scan::Err(Cmd::Append)),
                 ScanUnit::Newline(_) => ((Next, ok), Scan::Err(Cmd::Terminate)),
-                ScanUnit::Unknown(_) => ((Next, ok), Scan::Err(Cmd::Append)),
+                ScanUnit::Unrecognized(_) => ((Next, ok), Scan::Err(Cmd::Append)),
                 ScanUnit::Eof => ((Finished, ok), Scan::Err(Cmd::Terminate)),
             },
         });
@@ -250,11 +250,11 @@ impl Lexer {
             ScanUnit::Delimiter(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Space(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Newline(_) => Scan::Ok(Cmd::Terminate),
-            ScanUnit::Unknown(_) => Scan::Err(Cmd::Terminate),
+            ScanUnit::Unrecognized(_) => Scan::Err(Cmd::Terminate),
             ScanUnit::Eof => Scan::Ok(Cmd::Terminate),
         });
 
-        map_tok(res, |str| TokenKind::Operator(str))
+        map_tok(res, |str| TokenKind::Operator(OpTok(str)))
     }
 
     fn scan_delimiter(&mut self, delim: Delimiter) -> TokenKind {
@@ -264,8 +264,8 @@ impl Lexer {
             Delimiter::Paren(g) => TokenKind::Group(Group::Paren(g.into())),
             Delimiter::Brace(g) => TokenKind::Group(Group::Brace(g.into())),
             Delimiter::Bracket(g) => TokenKind::Group(Group::Bracket(g.into())),
-            Delimiter::Semicolon => TokenKind::Semicolon,
-            Delimiter::Comma => TokenKind::Comma,
+            Delimiter::Semicolon => TokenKind::Semicolon(Semicolon),
+            Delimiter::Comma => TokenKind::Comma(Comma),
         }
     }
 
@@ -282,7 +282,7 @@ impl Lexer {
             ScanUnit::Space(s) if s == space => Scan::Ok(Cmd::Append),
             ScanUnit::Space(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Newline(_) => Scan::Ok(Cmd::Terminate),
-            ScanUnit::Unknown(_) => Scan::Ok(Cmd::Terminate),
+            ScanUnit::Unrecognized(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Eof => Scan::Ok(Cmd::Terminate),
         });
 
@@ -303,7 +303,7 @@ impl Lexer {
             ScanUnit::Delimiter(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Space(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Newline(_) => Scan::Ok(Cmd::Append),
-            ScanUnit::Unknown(_) => Scan::Ok(Cmd::Terminate),
+            ScanUnit::Unrecognized(_) => Scan::Ok(Cmd::Terminate),
             ScanUnit::Eof => Scan::Ok(Cmd::Terminate),
         });
 
@@ -325,7 +325,7 @@ impl Iterator for Lexer {
         // we have to know the current index `i` to get a substring.
         // Advancing it now means the classic off by one error.
         let kind = match self.cursor.get() {
-            ScanUnit::Unknown(_) => self.scan_unknown(),
+            ScanUnit::Unrecognized(_) => self.scan_unknown(),
             ScanUnit::Alpha(_) => self.scan_identifier(),
             ScanUnit::Digit(_) => self.scan_numeral(),
             ScanUnit::Quot(q) => self.scan_bytestring(q),
@@ -335,7 +335,7 @@ impl Iterator for Lexer {
             ScanUnit::Newline(_) => self.scan_newlines(),
             ScanUnit::Eof => {
                 self.advance_cursor();
-                TokenKind::Eof
+                TokenKind::Eof(Eof)
             }
         };
 

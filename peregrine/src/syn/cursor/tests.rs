@@ -76,22 +76,22 @@ fn cursor_works_over_codepoints() {
     assert_eq!(su1, ScanUnit::Operator(Operator('!')));
 
     match cursor.next().unwrap() {
-        ScanUnit::Unknown(u) if u == Unknown('©') => assert!(!u.is_ascii()),
+        ScanUnit::Unrecognized(u) if u == Unrecognized('©') => assert!(!u.is_ascii()),
         _ => panic!("not this one"),
     }
 
     match cursor.next().unwrap() {
-        ScanUnit::Unknown(u) if u == Unknown('@') => assert!(u.is_ascii()),
+        ScanUnit::Unrecognized(u) if u == Unrecognized('@') => assert!(u.is_ascii()),
         _ => panic!("not this one"),
     }
 
     match cursor.next().unwrap() {
-        ScanUnit::Unknown(u) if u == Unknown('α') => assert!(!u.is_ascii()),
+        ScanUnit::Unrecognized(u) if u == Unrecognized('α') => assert!(!u.is_ascii()),
         _ => panic!("not this one"),
     }
 
     match cursor.next().unwrap() {
-        ScanUnit::Unknown(u) if u == Unknown('€') => assert!(!u.is_ascii()),
+        ScanUnit::Unrecognized(u) if u == Unrecognized('€') => assert!(!u.is_ascii()),
         _ => panic!("not this one"),
     }
 }

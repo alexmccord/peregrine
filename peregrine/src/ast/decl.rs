@@ -3,7 +3,7 @@ use crate::idx;
 use crate::ast::expr::Expr;
 use crate::ast::TokenSpan;
 
-use crate::syn::lexer::tok::TokenId;
+use crate::syn::tok::TokenId;
 
 idx::newindex!(pub DeclId);
 
@@ -86,14 +86,14 @@ pub struct Open(pub(crate) Box<Decl>);
 pub struct Record(pub(crate) Expr, pub(crate) Vec<Expr>);
 
 #[derive(Debug)]
-pub struct Data(
-    pub(crate) Expr,
-    pub(crate) EnumKind,
-    pub(crate) Option<Deriving>,
-);
+pub struct Data {
+    sig: Expr,
+    kind: DataKind,
+    deriving: Option<Deriving>,
+}
 
 #[derive(Debug)]
-pub enum EnumKind {
+pub enum DataKind {
     NoCons,
     Equals(Expr),
     Where(Vec<Expr>),
@@ -259,7 +259,7 @@ impl DeclKind {
         DeclKind::Record(Record::new(sig, fields))
     }
 
-    pub fn new_data(sig: Expr, cons: EnumKind, deriving: Option<Deriving>) -> DeclKind {
+    pub fn new_data(sig: Expr, cons: DataKind, deriving: Option<Deriving>) -> DeclKind {
         DeclKind::Data(Data::new(sig, cons, deriving))
     }
 
@@ -375,32 +375,36 @@ impl Record {
 }
 
 impl Data {
-    pub fn new(sig: Expr, cons: EnumKind, deriving: Option<Deriving>) -> Data {
-        Data(sig, cons, deriving)
+    pub fn new(sig: Expr, kind: DataKind, deriving: Option<Deriving>) -> Data {
+        Data {
+            sig,
+            kind,
+            deriving,
+        }
     }
 
     pub fn empty(sig: Expr) -> Data {
-        Data(sig, EnumKind::NoCons, None)
+        Data::new(sig, DataKind::NoCons, None)
     }
 
     pub fn adt(sig: Expr, constructors: Expr, deriving: Option<Deriving>) -> Data {
-        Data(sig, EnumKind::Equals(constructors), deriving)
+        Data::new(sig, DataKind::Equals(constructors), deriving)
     }
 
     pub fn gadt(sig: Expr, constructors: Vec<Expr>, deriving: Option<Deriving>) -> Data {
-        Data(sig, EnumKind::Where(constructors), deriving)
+        Data::new(sig, DataKind::Where(constructors), deriving)
     }
 
     pub fn sig(&self) -> &Expr {
-        &self.0
+        &self.sig
     }
 
-    pub fn kind(&self) -> &EnumKind {
-        &self.1
+    pub fn kind(&self) -> &DataKind {
+        &self.kind
     }
 
     pub fn deriving(&self) -> Option<&Deriving> {
-        self.2.as_ref()
+        self.deriving.as_ref()
     }
 }
 

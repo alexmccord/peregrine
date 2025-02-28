@@ -1,24 +1,22 @@
-pub mod cursor;
-pub mod lexer;
-pub mod offside;
-pub mod parser;
-
-use lexer::tok::{Group, TokenVec};
-
 use crate::ast::expr::ExprId;
-use crate::ast::node::{Node, NodeId};
+use crate::ast::node::Node;
 use crate::ast::{Ast, SourceSpan, TokenSpan};
 
-pub use lexer::tokenize;
-pub use parser::parse;
+mod cursor;
+mod lexer;
+mod offside;
+mod parser;
+
+pub use lexer::*;
+pub use parser::*;
 
 pub struct SourceModule {
     pub ast: Ast,
-    pub tokens: TokenVec,
+    pub tokens: tok::TokenVec,
 }
 
 impl SourceModule {
-    fn new(ast: Ast, tokens: TokenVec) -> SourceModule {
+    fn new(ast: Ast, tokens: tok::TokenVec) -> SourceModule {
         SourceModule { ast, tokens }
     }
 
@@ -37,7 +35,7 @@ impl SourceModule {
 
 pub struct ParseResult {
     pub source_module: SourceModule,
-    pub errors: Vec<(NodeId, SyntaxError)>,
+    pub errors: Vec<SyntaxError>,
 }
 
 impl ParseResult {
@@ -45,14 +43,17 @@ impl ParseResult {
         &self.source_module.ast
     }
 
-    pub fn tokens(&self) -> &TokenVec {
+    pub fn tokens(&self) -> &tok::TokenVec {
         &self.source_module.tokens
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SyntaxError {
-    NotBalanced(Group),
+    NotBalanced(tok::Group),
+    UnknownToken(tok::TokenId),
+    ExpectedTokenKind(tok::TokenKind),
+    ExpectedTokenType(tok::TokenType),
     MissingName,
     MissingExpr,
     MissingDecl,
@@ -61,9 +62,4 @@ pub enum SyntaxError {
     LetExprIsRequiredToHaveEquations,
     DoIsEmpty,
     LastStmtInDoMustBeExpr,
-    IfExpr {
-        missing_if_kw: bool,
-        missing_then_kw: bool,
-        missing_else_kw: bool,
-    },
 }

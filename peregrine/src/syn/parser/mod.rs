@@ -14,7 +14,24 @@ use super::offside::{Indentation, OffsideBy, PartialOffsideOrd};
 mod tests;
 
 pub fn parse(input: impl Into<String>) -> ParseResult {
-    Parser::parse(input)
+    let mut parser = Parser::new(input);
+    let offside = parser.current_offside.absolute();
+    parser.layout_stack.push(offside.cloned());
+
+    let decls = parser.parse_decls(&offside.cloned());
+
+    // Sanity: if we're done parsing, we should have no more tokens.
+    assert!(parser.lexer.next().is_none());
+
+    ParseResult {
+        source_module: SourceModule::new(Ast::new(decls), parser.tokens),
+        // HACK. I'll fix it later.
+        errors: parser
+            .errors
+            .iter()
+            .map(|(_, e)| e.clone())
+            .collect::<Vec<_>>(),
+    }
 }
 
 #[derive(Debug)]
@@ -52,21 +69,6 @@ impl Parser {
             tokens: TokenVec::new(),
             current_offside: OffsideBy::new(),
             layout_stack: LayoutStack::new(),
-        }
-    }
-
-    pub(crate) fn parse(input: impl Into<String>) -> ParseResult {
-        let mut parser = Parser::new(input);
-        let offside = parser.current_offside.absolute();
-        parser.layout_stack.push(offside.cloned());
-        let decls = parser.parse_decls(&offside.cloned());
-
-        // Sanity: if we're done parsing, we should have no more tokens.
-        assert!(parser.lexer.next().is_none());
-
-        ParseResult {
-            source_module: SourceModule::new(Ast::new(decls), parser.tokens),
-            errors: parser.errors,
         }
     }
 
@@ -128,7 +130,7 @@ impl Parser {
 
     fn try_parse_operator(&mut self, str: impl AsRef<str>) -> Option<TokenId> {
         self.try_consume(|tok| match tok {
-            TokenKind::Operator(op) => op == str.as_ref(),
+            TokenKind::Operator(Operator(op)) => op == str.as_ref(),
             _ => false,
         })
     }
@@ -236,9 +238,9 @@ impl Parser {
             TokenKind::Operator(_) => None,
             TokenKind::Group(_) => Some(self.parse_op_sig_tail(offside, tok)),
             TokenKind::Ws(_) => todo!(),
-            TokenKind::Semicolon => None,
-            TokenKind::Comma => None,
-            TokenKind::Eof => None,
+            TokenKind::Semicolon(_) => None,
+            TokenKind::Comma(_) => None,
+            TokenKind::Eof(_) => None,
         }
     }
 
@@ -266,7 +268,7 @@ impl Parser {
             last_tok = Some(id);
 
             if let TokenKind::Ident(ident) = &self.tokens[id].kind() {
-                path.push(PathNode::Name(ident.clone()));
+                path.push(PathNode::Name(ident.as_str().to_owned()));
 
                 let Some(tok) = self.try_parse_operator(".") else {
                     break;
@@ -464,11 +466,11 @@ impl Parser {
         &mut self,
         offside: &Option<AbsoluteOffside>,
         sig_tok: TokenId,
-        ident: String,
+        ident: Ident,
     ) -> Decl {
         self.skip_ws();
 
-        let var = self.make_expr(ExprKind::var(ident), sig_tok, sig_tok);
+        let var = self.make_expr(ExprKind::var(ident.as_str().to_owned()), sig_tok, sig_tok);
         self.parse_sig_tail(offside, var)
     }
 
@@ -636,9 +638,9 @@ impl Parser {
             TokenKind::Group(Group::Brace(Parity::Closed)) => None,
             TokenKind::Group(Group::Bracket(Parity::Closed)) => None,
             TokenKind::Ws(_) => todo!(),
-            TokenKind::Semicolon => todo!(), // TODO: error,
-            TokenKind::Comma => todo!(),     // TODO: error,
-            TokenKind::Eof => None,
+            TokenKind::Semicolon(_) => todo!(), // TODO: error,
+            TokenKind::Comma(_) => todo!(),     // TODO: error,
+            TokenKind::Eof(_) => None,
         }
     }
 
@@ -726,21 +728,21 @@ impl Parser {
             last_tok,
         );
 
-        let err = SyntaxError::IfExpr {
-            missing_if_kw: false,
-            missing_then_kw: then_tok.is_none(),
-            missing_else_kw: else_tok.is_none(),
-        };
+        todo!()
 
-        self.make_expr_error(err, expr.id(), if_tok, last_tok)
+        // self.make_expr_error(err, expr.id(), if_tok, last_tok)
     }
 
-    fn parse_ident_tail(&mut self, ident_tok: TokenId, ident: String) -> Expr {
-        self.make_expr(ExprKind::var(ident), ident_tok, ident_tok)
+    fn parse_ident_tail(&mut self, ident_tok: TokenId, ident: Ident) -> Expr {
+        self.make_expr(
+            ExprKind::var(ident.as_str().to_owned()),
+            ident_tok,
+            ident_tok,
+        )
     }
 
-    fn parse_numeral_tail(&mut self, num_tok: TokenId, num: String) -> Expr {
-        self.make_expr(ExprKind::num(num), num_tok, num_tok)
+    fn parse_numeral_tail(&mut self, num_tok: TokenId, num: Numeral) -> Expr {
+        self.make_expr(ExprKind::num(num.as_str().to_owned()), num_tok, num_tok)
     }
 
     fn parse_string_tail(&mut self, str_tok: TokenId, str: ByteString) -> Expr {
@@ -795,9 +797,9 @@ impl Parser {
             TokenKind::Group(Group::Brace(Parity::Closed)) => None,
             TokenKind::Group(Group::Bracket(Parity::Closed)) => None,
             TokenKind::Ws(_) => todo!(),
-            TokenKind::Semicolon => todo!(),
-            TokenKind::Comma => todo!(),
-            TokenKind::Eof => todo!(),
+            TokenKind::Semicolon(_) => todo!(),
+            TokenKind::Comma(_) => todo!(),
+            TokenKind::Eof(_) => todo!(),
         }
     }
 

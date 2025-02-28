@@ -4,7 +4,7 @@ pub mod node;
 
 use decl::Decl;
 
-use crate::syn::lexer::tok::TokenId;
+use crate::syn::tok::TokenId;
 
 pub struct Ast {
     decls: Vec<Decl>,

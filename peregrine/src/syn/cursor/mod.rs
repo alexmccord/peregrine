@@ -68,7 +68,7 @@ impl Cursor {
                 } else if let Some(s) = Space::from_char(c) {
                     ScanUnit::Space(s)
                 } else {
-                    ScanUnit::Unknown(Unknown(c))
+                    ScanUnit::Unrecognized(Unrecognized(c))
                 }
             }
         }

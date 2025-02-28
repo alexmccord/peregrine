@@ -153,12 +153,8 @@ fn parse_five_of_missing_type() {
     assert_eq!(five, "five");
     assert_eq!(e.as_error().unwrap(), None);
 
-    let error = errors
-        .iter()
-        .find_map(|(id, err)| (id == &e.id()).then_some(err))
-        .unwrap();
-
-    assert_eq!(error, &syn::SyntaxError::MissingExpr);
+    let mut errors_iter = errors.iter();
+    assert_eq!(errors_iter.next().unwrap(), &syn::SyntaxError::MissingExpr);
 }
 
 #[test]

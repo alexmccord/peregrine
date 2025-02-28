@@ -7,7 +7,7 @@ fn assert_ws<'a, I: Iterator<Item = (T, &'a TokenKind)>, T>(iter: &mut I, ws: Ws
 }
 
 fn assert_eof<'a, I: Iterator<Item = (T, &'a TokenKind)>, T>(iter: &mut I) {
-    assert_eq!(iter.next().map(|(_, tok)| tok), Some(&TokenKind::Eof));
+    assert_eq!(iter.next().map(|(_, tok)| tok), Some(&TokenKind::Eof(Eof)));
     assert_eq!(iter.next().map(|(_, tok)| tok), None);
 }
 
@@ -87,7 +87,7 @@ fn scan_ident() {
         iter.next(),
         Some((
             (Position::new(1, 0), Position::new(1, 3)),
-            &TokenKind::Ident("abc".into()),
+            &TokenKind::Ident(Ident("abc".into())),
         ))
     );
 
@@ -105,7 +105,7 @@ fn scan_ident_with_numerals() {
         iter.next(),
         Some((
             (Position::new(1, 0), Position::new(1, 5)),
-            &TokenKind::Ident("abc12".into()),
+            &TokenKind::Ident(Ident("abc12".into())),
         ))
     );
 
@@ -254,7 +254,7 @@ fn multiple_tokens() {
         iter.next(),
         Some((
             (Position::new(1, 0), Position::new(1, 3)),
-            &TokenKind::Ident("abc".to_string()),
+            &TokenKind::Ident(Ident("abc".to_string())),
         ))
     );
 
@@ -264,7 +264,7 @@ fn multiple_tokens() {
         iter.next(),
         Some((
             (Position::new(1, 4), Position::new(1, 7)),
-            &TokenKind::Numeral("123".to_string()),
+            &TokenKind::Numeral(Numeral("123".to_string())),
         ))
     );
 
@@ -282,7 +282,7 @@ fn scan_operators() {
         iter.next(),
         Some((
             (Position::new(1, 0), Position::new(1, 1)),
-            &TokenKind::Operator(".".to_string()),
+            &TokenKind::Operator(tok::Operator(".".to_string())),
         ))
     );
 
@@ -292,7 +292,7 @@ fn scan_operators() {
         iter.next(),
         Some((
             (Position::new(1, 2), Position::new(1, 4)),
-            &TokenKind::Operator("..".to_string()),
+            &TokenKind::Operator(tok::Operator("..".to_string())),
         ))
     );
 
@@ -302,7 +302,7 @@ fn scan_operators() {
         iter.next(),
         Some((
             (Position::new(1, 5), Position::new(1, 7)),
-            &TokenKind::Operator(".|".to_string()),
+            &TokenKind::Operator(tok::Operator(".|".to_string())),
         ))
     );
 
@@ -312,7 +312,7 @@ fn scan_operators() {
         iter.next(),
         Some((
             (Position::new(1, 8), Position::new(1, 9)),
-            &TokenKind::Operator("~".to_string()),
+            &TokenKind::Operator(tok::Operator("~".to_string())),
         ))
     );
 
@@ -322,7 +322,7 @@ fn scan_operators() {
         iter.next(),
         Some((
             (Position::new(1, 10), Position::new(1, 12)),
-            &TokenKind::Operator("&&".to_string()),
+            &TokenKind::Operator(tok::Operator("&&".to_string())),
         ))
     );
 
@@ -332,7 +332,7 @@ fn scan_operators() {
         iter.next(),
         Some((
             (Position::new(1, 13), Position::new(1, 14)),
-            &TokenKind::Operator("~".to_string()),
+            &TokenKind::Operator(tok::Operator("~".to_string())),
         ))
     );
 
@@ -366,7 +366,7 @@ fn scan_with_newlines() {
         iter.next(),
         Some((
             (Position::new(1, 0), Position::new(1, 3)),
-            &TokenKind::Ident("abc".to_string()),
+            &TokenKind::Ident(Ident("abc".to_string())),
         ))
     );
 
@@ -376,7 +376,7 @@ fn scan_with_newlines() {
         iter.next(),
         Some((
             (Position::new(1, 4), Position::new(1, 7)),
-            &TokenKind::Ident("def".to_string()),
+            &TokenKind::Ident(Ident("def".to_string())),
         ))
     );
 
@@ -386,7 +386,7 @@ fn scan_with_newlines() {
         iter.next(),
         Some((
             (Position::new(2, 0), Position::new(2, 3)),
-            &TokenKind::Ident("ghi".to_string()),
+            &TokenKind::Ident(Ident("ghi".to_string())),
         ))
     );
 
@@ -396,7 +396,7 @@ fn scan_with_newlines() {
         iter.next(),
         Some((
             (Position::new(2, 4), Position::new(2, 7)),
-            &TokenKind::Ident("jkl".to_string()),
+            &TokenKind::Ident(Ident("jkl".to_string())),
         ))
     );
 
@@ -409,19 +409,19 @@ fn scan_ws() {
     let mut iter = tokens.iter().map(|(_, tok)| tok.kind());
 
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
-    assert_eq!(iter.next(), Some(&TokenKind::Ident("a".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident(Ident("a".to_string()))));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 1 })));
-    assert_eq!(iter.next(), Some(&TokenKind::Ident("b".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident(Ident("b".to_string()))));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
-    assert_eq!(iter.next(), Some(&TokenKind::Ident("c".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident(Ident("c".to_string()))));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 1 })));
-    assert_eq!(iter.next(), Some(&TokenKind::Ident("d".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident(Ident("d".to_string()))));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
-    assert_eq!(iter.next(), Some(&TokenKind::Ident("e".to_string())));
-    assert_eq!(iter.next(), Some(&TokenKind::Eof));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident(Ident("e".to_string()))));
+    assert_eq!(iter.next(), Some(&TokenKind::Eof(Eof)));
     assert_eq!(iter.next(), None);
 }
 
@@ -430,23 +430,23 @@ fn ws_always_emitted() {
     let token_vec = syn::tokenize("a\n  b\n  c\n  \td\n  \t  e");
     let mut iter = token_vec.iter().map(|(_, tok)| tok.kind());
 
-    assert_eq!(iter.next(), Some(&TokenKind::Ident("a".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident(Ident("a".to_string()))));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
-    assert_eq!(iter.next(), Some(&TokenKind::Ident("b".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident(Ident("b".to_string()))));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
-    assert_eq!(iter.next(), Some(&TokenKind::Ident("c".to_string())));
-    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
-    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
-    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Tab { count: 1 })));
-    assert_eq!(iter.next(), Some(&TokenKind::Ident("d".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident(Ident("c".to_string()))));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Tab { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident(Ident("d".to_string()))));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
-    assert_eq!(iter.next(), Some(&TokenKind::Ident("e".to_string())));
-    assert_eq!(iter.next(), Some(&TokenKind::Eof));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Tab { count: 1 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident(Ident("e".to_string()))));
+    assert_eq!(iter.next(), Some(&TokenKind::Eof(Eof)));
     assert_eq!(iter.next(), None);
 }
 
@@ -455,13 +455,13 @@ fn ws_mixing_can_happen() {
     let tokens = syn::tokenize("a\n  b\n\t\tc");
     let mut iter = tokens.iter().map(|(_, tok)| tok.kind());
 
-    assert_eq!(iter.next(), Some(&TokenKind::Ident("a".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident(Ident("a".to_string()))));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Space { count: 2 })));
-    assert_eq!(iter.next(), Some(&TokenKind::Ident("b".to_string())));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident(Ident("b".to_string()))));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Newline { count: 1 })));
     assert_eq!(iter.next(), Some(&TokenKind::Ws(Ws::Tab { count: 2 })));
-    assert_eq!(iter.next(), Some(&TokenKind::Ident("c".to_string())));
-    assert_eq!(iter.next(), Some(&TokenKind::Eof));
+    assert_eq!(iter.next(), Some(&TokenKind::Ident(Ident("c".to_string()))));
+    assert_eq!(iter.next(), Some(&TokenKind::Eof(Eof)));
     assert_eq!(iter.next(), None);
 }

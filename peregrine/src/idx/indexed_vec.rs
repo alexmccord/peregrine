@@ -64,12 +64,23 @@ impl<I: Idx, T> IndexedVec<I, T> {
         self.inner.iter()
     }
 
-    pub fn next_id(id: I) -> I {
-        I::new(id.index() + 1)
+    pub fn last_id(&self) -> Option<I> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(I::new(self.len()))
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
     }
 
     pub fn len(&self) -> usize {
         self.inner.len()
+    }
+    pub fn last(&self) -> Option<&T> {
+        self.inner.last()
     }
 }
 
