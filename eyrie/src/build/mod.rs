@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use prgc::fs::FileResolver;
+use lc::fs::FileResolver;
 
 mod deps;
 pub mod manifest;
@@ -18,8 +18,8 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
+    use lc::fs::VirtualFileSystem;
     use manifest::{ProjectManifest, WorkspaceManifest};
-    use prgc::fs::VirtualFileSystem;
 
     fn project(name: &str) -> String {
         toml::to_string(&ProjectManifest::new(name.to_string())).unwrap()

@@ -1,0 +1,10 @@
+-- As mentioned in this, we're not going to design the Ord classes by copying how it's done
+-- in other languages like Haskell and Rust. I'll need to get around to looking at Wikipedia
+-- and mathematics to figure it out.
+--
+-- The counterexample:
+--
+-- https://github.com/alexmccord/TLTMNBN/blob/main/TLTMNBN/src/syn/offside/mod.rs#L329-L396
+--
+-- The problem is that Rust assumes too much of total ordering even though it's called
+-- `PartialOrd`... For now this file exists to remind us not to fuck this up.

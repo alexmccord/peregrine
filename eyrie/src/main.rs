@@ -3,7 +3,7 @@ use clap::Parser;
 use eyrie;
 use eyrie::Command;
 
-use prgc::fs::FileSystemIO;
+use lc::fs::FileSystemIO;
 
 fn main() {
     let args = Command::parse();

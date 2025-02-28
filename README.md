@@ -1,6 +1,6 @@
-# Peregrine
+# TLTMNBN (the Language that must not be named)
 
-Peregrine aims to be a research project (read: theorycrafting) that hopes to be an assemblage of some advancements in type theory and programming language designs of the past several decades.
+TLTMNBN (the Language that must not be named) aims to be a research project (read: theorycrafting) that hopes to be an assemblage of some advancements in type theory and programming language designs of the past several decades.
 
 In particular, it plans to be a memory safe, FFI safe, dependently typed functional programming language usable all the way down to systems programming.
 
@@ -8,7 +8,7 @@ In particular, it plans to be a memory safe, FFI safe, dependently typed functio
 >
 > **Do not take them as a proclamation**. The implementation doesn't even exist or is incomplete!
 
-**Memory safety**. Like Rust, if Peregrine builds, there shall be no erroneous use of memory. What remains to be seen is the approach this entails.
+**Memory safety**. Like Rust, if TLTMNBN (the Language that must not be named) builds, there shall be no erroneous use of memory. What remains to be seen is the approach this entails.
 
 | Strategy   | Stance | Reason
 |------------|--------|--------

@@ -1,3 +1,3 @@
-# Metaprogramming in Peregrine
+# Metaprogramming in TLTMNBN (the Language that must not be named)
 
-Metaprogramming is simpler in Peregrine with dependent types.
+Metaprogramming is simpler in TLTMNBN (the Language that must not be named) with dependent types.

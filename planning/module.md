@@ -6,7 +6,7 @@ TODO: read https://graydon2.dreamwidth.org/253769.html and research on first-cla
 
 Nevertheless, there may or may not be some modifications that I want to make from the usual ML design of modules, possibly.
 
-## Peregrine
+## TLTMNBN (the Language that must not be named)
 
 > I wrote down my philosophical opinions on what the module system should be, but I have yet to read up on first class modules, so expect this to be changed.
 

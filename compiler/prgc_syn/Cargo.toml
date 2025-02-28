@@ -1,8 +1,0 @@
-[package]
-name = "prgc_syn"
-edition = "2021"
-
-[dependencies]
-prgc_ast = { path = "../prgc_ast" }
-prgc_idx = { path = "../prgc_idx" }
-thiserror = "2.0.11"

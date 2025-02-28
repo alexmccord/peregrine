@@ -2,7 +2,7 @@
 
 In most languages that doesn't check for totality will not be able to guarantee it. Of those that does, does not really lean on it, as far as I can tell.
 
-In Peregrine, I plan on using isomorphism classes as an analogy to translating types in Peregrine onto the ideal IR type. The keyword here is "ideal" which is compiler defined. Although this may change as well as I learn more, or if there's a better approach I have yet to realize.
+In TLTMNBN (the Language that must not be named), I plan on using isomorphism classes as an analogy to translating types in TLTMNBN (the Language that must not be named) onto the ideal IR type. The keyword here is "ideal" which is compiler defined. Although this may change as well as I learn more, or if there's a better approach I have yet to realize.
 
 ## Types of isomorphisms
 
@@ -12,7 +12,7 @@ In Peregrine, I plan on using isomorphism classes as an analogy to translating t
 2. Isomorphism, an isomorphism between two _algebraic structures_.
 5. And so many more.
 
-Since there are different types of isomorphisms, we need some generalization. Category theory gives us the language we need to provide this. The isomorphism class that we refer to are the one in the language of category theory, not the ones from various fields of mathematics, although Peregrine will need to implement some of them.
+Since there are different types of isomorphisms, we need some generalization. Category theory gives us the language we need to provide this. The isomorphism class that we refer to are the one in the language of category theory, not the ones from various fields of mathematics, although TLTMNBN (the Language that must not be named) will need to implement some of them.
 
 So we (roughly speaking) define our `<=>` trait:
 
@@ -24,7 +24,7 @@ trait (a: T) <=> (b: T) where
   a <=> b
 ```
 
-And with this definition, any `a` and `b` with a common supertrait can implement the `<=>` trait. This means if `a` is some set not endowed by some algebraic structure and `b` is some other set endowed with an algebraic structure, Peregrine should issue an error here.
+And with this definition, any `a` and `b` with a common supertrait can implement the `<=>` trait. This means if `a` is some set not endowed by some algebraic structure and `b` is some other set endowed with an algebraic structure, TLTMNBN (the Language that must not be named) should issue an error here.
 
 ## In practical use
 

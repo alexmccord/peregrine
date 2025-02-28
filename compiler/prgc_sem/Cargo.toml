@@ -1,6 +1,0 @@
-[package]
-name = "prgc_sem"
-edition = "2021"
-
-[dependencies]
-prgc_idx = { path = "../prgc_idx" }

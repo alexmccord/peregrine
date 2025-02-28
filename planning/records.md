@@ -1,4 +1,4 @@
-# Records in Peregrine
+# Records in TLTMNBN (the Language that must not be named)
 
 The concept of an "extensible record" varies on a per language basis, depending on their paradigm or the constraints that a language has to abide by, due to
 their specific type system. Some of it has been listed below.
@@ -103,7 +103,7 @@ This is usually done with class inheritance, but there are other options too if 
 
 Elm did something a bit nice for this, but is intended to support anonymous records since they live atop JavaScript runtime.
 
-## Records in Peregrine
+## Records in TLTMNBN (the Language that must not be named)
 
 Haskell _technically_ supports extensible records, but it doesn't seem founded in set theoretic ideas of an intersection type. Suppose you have your records
 

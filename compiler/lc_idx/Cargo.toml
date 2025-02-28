@@ -1,0 +1,3 @@
+[package]
+name = "lc_idx"
+edition = "2021"

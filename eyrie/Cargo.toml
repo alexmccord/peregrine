@@ -3,7 +3,7 @@ name = "eyrie"
 edition = "2021"
 
 [dependencies]
-prgc = { path = "../compiler/prgc" }
+lc = { path = "../compiler/lc" }
 clap = { version = "4.5.23", features = ["derive"] }
 serde = { version = "1.0.217", features = ["serde_derive"] }
 thiserror = "2.0.11"

@@ -137,7 +137,7 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "git2",
- "prgc",
+ "lc",
  "serde",
  "thiserror",
  "toml",
@@ -438,56 +438,56 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "953ec861398dccce10c670dfeaf3ec4911ca479e9c02154b3a215178c5f566f2"
 
 [[package]]
-name = "prgc"
+name = "lc"
 version = "0.0.0"
 dependencies = [
  "clap",
- "prgc_ast",
- "prgc_fs",
- "prgc_idx",
- "prgc_sem",
- "prgc_syn",
- "prgc_trie",
+ "lc_ast",
+ "lc_fs",
+ "lc_idx",
+ "lc_sem",
+ "lc_syn",
+ "lc_trie",
  "thiserror",
 ]
 
 [[package]]
-name = "prgc_ast"
+name = "lc_ast"
 version = "0.0.0"
 dependencies = [
- "prgc_idx",
+ "lc_idx",
 ]
 
 [[package]]
-name = "prgc_fs"
+name = "lc_fs"
 version = "0.0.0"
 dependencies = [
- "prgc_trie",
+ "lc_trie",
  "thiserror",
 ]
 
 [[package]]
-name = "prgc_idx"
+name = "lc_idx"
 version = "0.0.0"
 
 [[package]]
-name = "prgc_sem"
+name = "lc_sem"
 version = "0.0.0"
 dependencies = [
- "prgc_idx",
+ "lc_idx",
 ]
 
 [[package]]
-name = "prgc_syn"
+name = "lc_syn"
 version = "0.0.0"
 dependencies = [
- "prgc_ast",
- "prgc_idx",
+ "lc_ast",
+ "lc_idx",
  "thiserror",
 ]
 
 [[package]]
-name = "prgc_trie"
+name = "lc_trie"
 version = "0.0.0"
 
 [[package]]

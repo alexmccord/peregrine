@@ -7,7 +7,7 @@ There are several kinds of evaluation strategies in the context of an abstract m
 3. [Call-by-push-value](#call-by-push-value), and
 4. [Call-by-coneed](#call-by-coneed).
 
-We list them, what they are, and then we make an administrative decision on what Peregrine should use.
+We list them, what they are, and then we make an administrative decision on what TLTMNBN (the Language that must not be named) should use.
 
 ## Call-by-value
 
@@ -65,7 +65,7 @@ At first sight, they appear identical to call-by-push-value. The main difference
 
 ## Proposal
 
-We would like for the evaluation strategy in Peregrine to be call-by-star (not officially named), as in, all of it. Call-by-star has the four corners:
+We would like for the evaluation strategy in TLTMNBN (the Language that must not be named) to be call-by-star (not officially named), as in, all of it. Call-by-star has the four corners:
 
 1. Call-by-value, for efficient data storage or strict computation.
 2. Call-by-name, for lazy single-shot computation.
