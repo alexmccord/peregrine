@@ -1,7 +1,5 @@
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::io;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -213,7 +211,7 @@ mod tests {
         let mut vfs = VirtualFileSystem::new();
         vfs.write(PathBuf::from("/project/eyrie.toml"), "manifest file!")
             .unwrap();
-        vfs.write(PathBuf::from("/project/src/foo/bar/baz.prg"), "")
+        vfs.write(PathBuf::from("/project/src/foo/bar/baz.l"), "")
             .unwrap();
 
         let (location, file) =
@@ -226,7 +224,7 @@ mod tests {
     #[test]
     fn cannot_find_manifest() {
         let mut vfs = VirtualFileSystem::new();
-        vfs.write(PathBuf::from("/project/src/foo/bar/baz.prg"), "")
+        vfs.write(PathBuf::from("/project/src/foo/bar/baz.l"), "")
             .unwrap();
 
         let err = Manifest::locate_and_open_file(&vfs, &PathBuf::from("/project/src/foo/bar"))

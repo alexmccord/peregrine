@@ -344,6 +344,67 @@ dependencies = [
 ]
 
 [[package]]
+name = "lc"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "lc_ast",
+ "lc_fs",
+ "lc_ir",
+ "lc_rt",
+ "lc_sem",
+ "lc_syn",
+ "thiserror",
+]
+
+[[package]]
+name = "lc_ast"
+version = "0.0.0"
+dependencies = [
+ "lc_idx",
+]
+
+[[package]]
+name = "lc_fs"
+version = "0.0.0"
+dependencies = [
+ "lc_trie",
+ "thiserror",
+]
+
+[[package]]
+name = "lc_idx"
+version = "0.0.0"
+
+[[package]]
+name = "lc_ir"
+version = "0.0.0"
+
+[[package]]
+name = "lc_rt"
+version = "0.0.0"
+
+[[package]]
+name = "lc_sem"
+version = "0.0.0"
+dependencies = [
+ "lc_idx",
+]
+
+[[package]]
+name = "lc_syn"
+version = "0.0.0"
+dependencies = [
+ "lc_ast",
+ "lc_idx",
+ "thiserror",
+]
+
+[[package]]
+name = "lc_trie"
+version = "0.0.0"
+
+[[package]]
 name = "libc"
 version = "0.2.169"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -436,59 +497,6 @@ name = "pkg-config"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "953ec861398dccce10c670dfeaf3ec4911ca479e9c02154b3a215178c5f566f2"
-
-[[package]]
-name = "lc"
-version = "0.0.0"
-dependencies = [
- "clap",
- "lc_ast",
- "lc_fs",
- "lc_idx",
- "lc_sem",
- "lc_syn",
- "lc_trie",
- "thiserror",
-]
-
-[[package]]
-name = "lc_ast"
-version = "0.0.0"
-dependencies = [
- "lc_idx",
-]
-
-[[package]]
-name = "lc_fs"
-version = "0.0.0"
-dependencies = [
- "lc_trie",
- "thiserror",
-]
-
-[[package]]
-name = "lc_idx"
-version = "0.0.0"
-
-[[package]]
-name = "lc_sem"
-version = "0.0.0"
-dependencies = [
- "lc_idx",
-]
-
-[[package]]
-name = "lc_syn"
-version = "0.0.0"
-dependencies = [
- "lc_ast",
- "lc_idx",
- "thiserror",
-]
-
-[[package]]
-name = "lc_trie"
-version = "0.0.0"
 
 [[package]]
 name = "proc-macro2"

@@ -6,10 +6,15 @@ use lc_ast::Ast;
 use lc_ast::NodeId;
 
 pub mod cursor;
+pub mod scanunit;
+
 pub mod lexer;
+pub use lexer::tokenize;
+
 pub mod offside;
 pub mod parser;
-pub mod scanunit;
+pub use parser::parse;
+
 pub mod span;
 pub mod tok;
 

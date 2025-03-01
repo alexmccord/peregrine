@@ -34,7 +34,7 @@ mod tests {
         let mut vfs = VirtualFileSystem::new();
         vfs.write(PathBuf::from("/eyrie.toml"), project("foo"))
             .unwrap();
-        vfs.write(PathBuf::from("/src/foo.prg"), "").unwrap();
+        vfs.write(PathBuf::from("/src/foo.l"), "").unwrap();
 
         let res = build(Build { dir: None }, vfs);
 
@@ -46,15 +46,15 @@ mod tests {
         let mut vfs = VirtualFileSystem::new();
         vfs.write(PathBuf::from("/eyrie.toml"), project("foo"))
             .unwrap();
-        vfs.write(PathBuf::from("/src/foo/bar.prg"), "").unwrap();
+        vfs.write(PathBuf::from("/src/foo/bar.l"), "").unwrap();
 
-        // assert!(res == BuildError::PathMustBeAPrgFile(PathBuf::from("/foo")));
+        // assert!(res == BuildError::PathMustBeALFile(PathBuf::from("/foo")));
     }
 
     #[test]
     fn build_project_without_manifest() {
         let mut vfs = VirtualFileSystem::new();
-        vfs.write(PathBuf::from("/src/foo.prg"), "").unwrap();
+        vfs.write(PathBuf::from("/src/foo.l"), "").unwrap();
 
         // assert!(res == ManifestError::ManifestNotFound);
     }
@@ -62,11 +62,11 @@ mod tests {
     #[test]
     fn build_project_with_wrong_manifest_type() {
         let mut vfs = VirtualFileSystem::new();
-        vfs.write(PathBuf::from("/src/foo.prg"), workspace(Vec::new()))
+        vfs.write(PathBuf::from("/src/foo.l"), workspace(Vec::new()))
             .unwrap();
 
         // let mut driver = Driver::new(vfs);
-        // driver.submit_task(BuildTask::BuildProject(PathBuf::from("/foo.prg")));
+        // driver.submit_task(BuildTask::BuildProject(PathBuf::from("/foo.l")));
         // let res = driver.execute().unwrap_err();
 
         // assert!(

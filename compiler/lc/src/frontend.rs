@@ -7,7 +7,7 @@ use crate::syn;
 
 #[derive(Debug)]
 pub struct CompileOptions {
-    /// A path to the input .prg file to compile.
+    /// A path to the input .l file to compile.
     pub input: PathBuf,
     /// A path to the output object file to write to.
     pub output: PathBuf,
@@ -32,7 +32,7 @@ pub enum Error {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BuildError {
     #[error("Unrecognizable file \"{0}\"")]
-    InputFileNotEndingInPrg(PathBuf),
+    InputFileNotEndingInL(PathBuf),
     #[error("{0}")]
     CannotBuildModuleAtDirectory(PathBuf),
 }

@@ -68,7 +68,7 @@ And `main` has a _default_ sink function over all the effects in `IO`, and we do
 
 The build script is siloed off from the apparatus, so the build script cannot depend on things in it, nor can the apparatus depend on things from the build script. This also has the nice effect of making it safe to `git clone` some random project written in TLTMNBN (the Language that must not be named).
 
-Each apparatus can have one and only one `build.prg` file, and it must live at the directory root of the apparatus. The entry point for it will deviate slightly.
+Each apparatus can have one and only one `build.l` file, and it must live at the directory root of the apparatus. The entry point for it will deviate slightly.
 
 ```
 let build: ?? = do
